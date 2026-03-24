@@ -1,0 +1,12 @@
+mainmenu "RT-Thread Configuration"
+
+source "$RTT_ROOT/Kconfig"
+source "$PKGS_ROOT/Kconfig"
+rsource "libraries/Kconfig"
+
+config SOC_STM32F446RETX
+    bool
+    select SOC_SERIES_STM32F4
+    select RT_USING_COMPONENTS_INIT
+    select RT_USING_USER_MAIN
+    default y
