@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kconfig · menuconfig · .config 关系图</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c0f12;
+      --panel: #141a20;
+      --grid: rgba(232, 196, 128, 0.06);
+      --ink: #e8e4dc;
+      --muted: #8a9199;
+      --accent: #e8a54b;
+      --accent-dim: #c4832e;
+      --ok: #6bcf8e;
+      --line: rgba(232, 165, 75, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Syne", system-ui, sans-serif;
+      color: var(--ink);
+      background-color: var(--bg);
+      background-image:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+
+    .wrap {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 4rem;
+    }
+
+    h1 {
+      font-size: clamp(1.6rem, 4vw, 2.1rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0 0 0.35rem;
+      color: var(--accent);
+    }
+
+    .sub {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+
+    .prose {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.82rem;
+      line-height: 1.75;
+      color: var(--ink);
+      margin-bottom: 2.5rem;
+    }
+
+    .prose p {
+      margin: 0 0 1rem;
+    }
+
+    .prose strong {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .diagram {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 1.5rem 1rem 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .diagram::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(232, 165, 75, 0.12), transparent 55%);
+      pointer-events: none;
+    }
+
+    .diagram h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--muted);
+      margin: 0 0 1.25rem;
+      position: relative;
+    }
+
+    .flow-svg {
+      width: 100%;
+      height: auto;
+      display: block;
+      position: relative;
+    }
+
+    .legend {
+      display: grid;
+      gap: 0.65rem;
+      margin-top: 1.5rem;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+      position: relative;
+    }
+
+    .legend span {
+      color: var(--ok);
+    }
+
+    .code-mini {
+      margin-top: 2rem;
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: 1fr;
+    }
+
+    @media (min-width: 640px) {
+      .code-mini {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .code-block {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.68rem;
+      line-height: 1.55;
+      background: #0a0d10;
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      padding: 0.85rem 1rem;
+      overflow-x: auto;
+      color: #b8c0c8;
+    }
+
+    .code-block .kw { color: var(--accent); }
+    .code-block .sym { color: var(--ok); }
+    .code-block .cmt { color: #5c6570; }
+
+    @keyframes dash-move {
+      to {
+        stroke-dashoffset: -24;
+      }
+    }
+
+    .arrow-anim {
+      stroke-dasharray: 6 6;
+      animation: dash-move 1.2s linear infinite;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Kconfig · menuconfig · .config</h1>
+    <p class="sub">RT-Thread / Linux 系 Kconfig 工作流 — 关系与数据流</p>
+
+    <div class="prose">
+      <p>
+        <strong>Kconfig</strong>（通常多个 <code style="color: var(--ok);">Kconfig</code> 文件通过 <code style="color: var(--ok);">source</code> 拼成一棵树）是<strong>配置项的定义</strong>：有哪些菜单、选项类型（bool / string / int）、默认值、依赖（<code style="color: var(--ok);">depends on</code>）、选中时自动带上的项（<code style="color: var(--ok);">select</code>）等。它描述的是「能配什么、怎么合法」，本身不保存你当前工程选了什么。
+      </p>
+      <p>
+        <strong>menuconfig</strong> 是<strong>人机界面</strong>之一：在终端里用菜单勾选/输入，背后仍然按同一套 Kconfig 规则解析与校验。同类还有 <code style="color: var(--ok);">nconfig</code>、纯文本的 <code style="color: var(--ok);">oldconfig</code> 等；它们都是「前端」，读 Kconfig，改的是结果文件。
+      </p>
+      <p>
+        <strong>.config</strong> 是<strong>当前配置快照</strong>：把每个符号写成 <code style="color: var(--ok);">CONFIG_XXX=y</code>、<code style="color: var(--ok);"># CONFIG_XXX is not set</code> 或具体取值。构建系统会据此生成头文件（如本工程的 <code style="color: var(--ok);">rtconfig.h</code>），编译时 C 代码用宏看到最终开关。
+      </p>
+    </div>
+
+    <div class="diagram">
+      <h2>数据流</h2>
+      <svg class="flow-svg" viewBox="0 0 800 420" xmlns="http://www.w3.org/2000/svg" aria-label="Kconfig 到编译的数据流">
+        <defs>
+          <marker id="arrowHead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#e8a54b" opacity="0.9" />
+          </marker>
+          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="2" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        <!-- Row 1: Kconfig tree -->
+        <rect x="40" y="32" width="200" height="88" rx="4" fill="#141a20" stroke="#e8a54b" stroke-width="1.5" filter="url(#glow)" />
+        <text x="140" y="62" text-anchor="middle" fill="#e8e4dc" font-family="Syne, sans-serif" font-size="15" font-weight="700">Kconfig 树</text>
+        <text x="140" y="86" text-anchor="middle" fill="#8a9199" font-family="JetBrains Mono, monospace" font-size="10">定义 · 依赖 · 默认值</text>
+        <text x="140" y="104" text-anchor="middle" fill="#6bcf8e" font-family="JetBrains Mono, monospace" font-size="9">Kconfig → RTT / BSP / 软件包 …</text>
+
+        <!-- Row 1: menuconfig -->
+        <rect x="300" y="32" width="200" height="88" rx="4" fill="#141a20" stroke="#e8a54b" stroke-width="1.5" />
+        <text x="400" y="62" text-anchor="middle" fill="#e8e4dc" font-family="Syne, sans-serif" font-size="15" font-weight="700">menuconfig</text>
+        <text x="400" y="86" text-anchor="middle" fill="#8a9199" font-family="JetBrains Mono, monospace" font-size="10">交互式配置前端（ncurses）</text>
+        <text x="400" y="104" text-anchor="middle" fill="#8a9199" font-family="JetBrains Mono, monospace" font-size="9">也可换 nconfig / 脚本合并 .config</text>
+
+        <!-- Row 1: .config -->
+        <rect x="560" y="32" width="200" height="88" rx="4" fill="#141a20" stroke="#6bcf8e" stroke-width="1.5" />
+        <text x="660" y="62" text-anchor="middle" fill="#e8e4dc" font-family="Syne, sans-serif" font-size="15" font-weight="700">.config</text>
+        <text x="660" y="86" text-anchor="middle" fill="#8a9199" font-family="JetBrains Mono, monospace" font-size="10">已选符号的平面列表</text>
+        <text x="660" y="104" text-anchor="middle" fill="#6bcf8e" font-family="JetBrains Mono, monospace" font-size="9">CONFIG_*=y / 未设置 注释</text>
+
+        <!-- Arrows top row -->
+        <line x1="240" y1="76" x2="292" y2="76" stroke="#e8a54b" stroke-width="2" marker-end="url(#arrowHead)" class="arrow-anim" opacity="0.85" />
+        <text x="266" y="68" text-anchor="middle" fill="#8a9199" font-family="JetBrains Mono, monospace" font-size="9">读取规则</text>
+
+        <line x1="500" y1="76" x2="552" y2="76" stroke="#e8a54b" stroke-width="2" marker-end="url(#arrowHead)" class="arrow-anim" opacity="0.85" />
+        <text x="526" y="68" text-anchor="middle" fill="#8a9199" font-family="JetBrains Mono, monospace" font-size="9">保存结果</text>
+
+        <!-- Feedback dashed: .config -> menuconfig -->
+        <path d="M 660 130 Q 660 200 400 200 Q 140 200 140 130" fill="none" stroke="#5c6570" stroke-width="1.5" stroke-dasharray="5 5" opacity="0.9" />
+        <text x="400" y="218" text-anchor="middle" fill="#5c6570" font-family="JetBrains Mono, monospace" font-size="9">下次打开 menuconfig 会载入已有 .config 并做依赖修正</text>
+
+        <!-- Build pipeline -->
+        <rect x="120" y="248" width="560" height="140" rx="4" fill="#0a0d10" stroke="rgba(232,165,75,0.25)" stroke-width="1" />
+        <text x="400" y="276" text-anchor="middle" fill="#8a9199" font-family="Syne, sans-serif" font-size="11" font-weight="600" letter-spacing="0.12em">构建阶段（与 menuconfig 解耦）</text>
+
+        <rect x="160" y="296" width="140" height="56" rx="3" fill="#141a20" stroke="#6bcf8e" stroke-width="1" />
+        <text x="230" y="322" text-anchor="middle" fill="#e8e4dc" font-family="JetBrains Mono, monospace" font-size="11">.config</text>
+        <text x="230" y="340" text-anchor="middle" fill="#8a9199" font-family="JetBrains Mono, monospace" font-size="9">事实来源</text>
+
+        <line x1="300" y1="324" x2="338" y2="324" stroke="#e8a54b" stroke-width="2" marker-end="url(#arrowHead)" />
+
+        <rect x="340" y="296" width="140" height="56" rx="3" fill="#141a20" stroke="#e8a54b" stroke-width="1" />
+        <text x="410" y="322" text-anchor="middle" fill="#e8e4dc" font-family="JetBrains Mono, monospace" font-size="11">rtconfig.h</text>
+        <text x="410" y="340" text-anchor="middle" fill="#8a9199" font-family="JetBrains Mono, monospace" font-size="9">由工具生成</text>
+
+        <line x1="480" y1="324" x2="518" y2="324" stroke="#e8a54b" stroke-width="2" marker-end="url(#arrowHead)" />
+
+        <rect x="520" y="296" width="140" height="56" rx="3" fill="#141a20" stroke="#c4832e" stroke-width="1" />
+        <text x="590" y="322" text-anchor="middle" fill="#e8e4dc" font-family="JetBrains Mono, monospace" font-size="11">SCons / 编译</text>
+        <text x="590" y="340" text-anchor="middle" fill="#8a9199" font-family="JetBrains Mono, monospace" font-size="9">#ifdef CONFIG_*</text>
+
+        <!-- Vertical from .config box above to build section -->
+        <line x1="660" y1="120" x2="660" y1="200" stroke="#6bcf8e" stroke-width="1" stroke-dasharray="4 4" opacity="0.6" />
+        <line x1="660" y1="200" x2="230" y2="200" stroke="#6bcf8e" stroke-width="1" stroke-dasharray="4 4" opacity="0.6" />
+        <line x1="230" y1="200" x2="230" y2="296" stroke="#6bcf8e" stroke-width="1" stroke-dasharray="4 4" opacity="0.6" />
+        <text x="440" y="188" text-anchor="middle" fill="#6bcf8e" font-family="JetBrains Mono, monospace" font-size="9">构建读取</text>
+      </svg>
+
+      <div class="legend">
+        <div>一句话：<span>Kconfig = 菜谱</span> · menuconfig = 点菜界面 · .config = 已下单的清单 · rtconfig.h = 厨房用的便签（编译可见）</div>
+      </div>
+    </div>
+
+    <div class="code-mini">
+      <div>
+        <div class="diagram" style="padding: 1rem; margin-top: 0;">
+          <h2 style="margin-bottom: 0.75rem;">Kconfig（片段）</h2>
+          <pre class="code-block"><span class="kw">config</span> SOC_STM32F446RETX
+    <span class="kw">bool</span>
+    <span class="kw">select</span> SOC_SERIES_STM32F4
+    <span class="kw">default</span> y</pre>
+        </div>
+      </div>
+      <div>
+        <div class="diagram" style="padding: 1rem; margin-top: 0;">
+          <h2 style="margin-bottom: 0.75rem;">.config（片段）</h2>
+          <pre class="code-block"><span class="sym">CONFIG_SOC_STM32F446ZE=y</span>
+<span class="sym">CONFIG_BOARD_STM32F446_NUCLEO=y</span>
+<span class="cmt"># CONFIG_RT_KLIBC_USING_LIBC_VSNPRINTF is not set</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -5,7 +5,7 @@ import rtconfig
 if os.getenv('RTT_ROOT'):
     RTT_ROOT = os.getenv('RTT_ROOT')
 else:
-    # main/ 不在 rt-thread/bsp 树下时，默认使用本机 SDK；仍可用 RTT_ROOT 覆盖。
+    # 工程不在 rt-thread/bsp 树下时，默认使用本机 SDK；仍可用 RTT_ROOT 覆盖。
     _default_sdk = os.path.expanduser('~/SDK/rt-thread')
     if os.path.isdir(os.path.join(_default_sdk, 'tools')):
         RTT_ROOT = os.path.normpath(_default_sdk)

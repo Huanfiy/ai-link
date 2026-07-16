@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kconfig · menuconfig · .config 关系图解</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          bg: '#0c1017',
+          surface: { DEFAULT: '#141922', alt: '#1c2230' },
+          border: { DEFAULT: '#2a3142', light: '#354058' },
+          text: { DEFAULT: '#e2e6f0', secondary: '#7c849a', tertiary: '#505870' },
+          accent: { DEFAULT: '#4d8eff', soft: 'rgba(77,142,255,0.1)' },
+          teal: '#34d1b4', amber: '#f0b040', red: '#ef5050', purple: '#a78bfa',
+        },
+        fontFamily: {
+          sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+          mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
+        },
+      },
+    },
+  };
+  </script>
+  <style>
+    :root {
+      --bg: #0c1017; --surface: #141922; --surface-alt: #1c2230;
+      --border: #2a3142; --border-light: #354058;
+      --text: #e2e6f0; --text-secondary: #7c849a; --text-tertiary: #505870;
+      --accent: #4d8eff; --accent-soft: rgba(77,142,255,0.1);
+      --teal: #34d1b4; --amber: #f0b040; --red: #ef5050; --purple: #a78bfa;
+    }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Sans', sans-serif; }
+    @keyframes flow { to { stroke-dashoffset: -24; } }
+    .flow-line { stroke-dasharray: 8 4; animation: flow 1.5s linear infinite; }
+    @keyframes stepIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .step-panel { animation: stepIn 0.3s ease forwards; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <!-- 勿使用 type=module / esm 远程 import：file:// 打开时会被浏览器拦截，导致整页空白 -->
+  <script type="text/babel" data-presets="react">
+    const { useState } = React;
+
+    const STEPS = [
+      {
+        id: 0,
+        title: 'Kconfig：配置「菜单与规则」',
+        body: 'Kconfig 文件（及 source 树）用一套 DSL 描述：有哪些选项、类型（bool/tristate/string…）、默认值、依赖（depends on）、可见性（visible if）、帮助文本与子菜单结构。它不保存你的勾选结果，只定义「可以配什么、怎么关联」。',
+        highlight: 'kconfig',
+      },
+      {
+        id: 1,
+        title: 'menuconfig：解析 Kconfig 并让你改',
+        body: 'menuconfig（以及 nconfig、xconfig 等）是 Kconfig 的前端：读取 Kconfig 定义，在终端或图形界面里展示树状菜单；你修改选项时，前端会按规则计算依赖、禁用非法组合。保存时把当前选择写成文本形式的配置文件。',
+        highlight: 'menuconfig',
+      },
+      {
+        id: 2,
+        title: '.config：当前选择的快照',
+        body: '.config 是纯文本清单，形如 CONFIG_XXX=y / m / n 或 CONFIG_XXX="值"。它是「结果」而非「定义」：构建系统与后续脚本（如生成 rtconfig.h、autoconf.h）主要读它，而不是回头解析整套 Kconfig 来做编译决策。',
+        highlight: 'config',
+      },
+      {
+        id: 3,
+        title: '串联关系（一页总览）',
+        body: '简记：Kconfig 描述空间；menuconfig 是人机接口，在空间里导航并落盘；.config 是落盘后的状态。改功能开关通常改 Kconfig 定义「有什么可选」，改工程行为则通过 menuconfig 或直接编辑 .config（不推荐手改，易与依赖不一致）。',
+        highlight: 'all',
+      },
+    ];
+
+    function SvgDefs() {
+      return (
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 8" refX="10" refY="4" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 4 L 0 8 z" fill="var(--text-tertiary)" />
+          </marker>
+          <marker id="arrow-accent" viewBox="0 0 10 8" refX="10" refY="4" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 4 L 0 8 z" fill="var(--accent)" />
+          </marker>
+          <marker id="arrow-teal" viewBox="0 0 10 8" refX="10" refY="4" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 4 L 0 8 z" fill="var(--teal)" />
+          </marker>
+        </defs>
+      );
+    }
+
+    function NodeBox({ x, y, w, h, label, sub, color, dim, active }) {
+      const stroke = active ? color : 'var(--border)';
+      const fill = active
+        ? `color-mix(in srgb, ${color} 12%, var(--surface-alt))`
+        : dim
+          ? 'color-mix(in srgb, var(--surface-alt) 70%, var(--bg))'
+          : 'var(--surface-alt)';
+      return (
+        <g style={{ transition: 'opacity 0.25s ease' }}>
+          <rect x={x} y={y} width={w} height={h} rx={8} fill={fill} stroke={stroke} strokeWidth={active ? 1.5 : 1} style={{ transition: 'all 0.2s ease' }} />
+          <text x={x + w / 2} y={y + (sub ? h / 2 - 5 : h / 2 + 2)} textAnchor="middle" dominantBaseline="middle" fill={active ? color : 'var(--text)'} style={{ fontSize: '13px', fontWeight: 600, fontFamily: '"IBM Plex Mono"' }}>
+            {label}
+          </text>
+          {sub && (
+            <text x={x + w / 2} y={y + h / 2 + 12} textAnchor="middle" dominantBaseline="middle" fill="var(--text-tertiary)" style={{ fontSize: '11px', fontFamily: '"IBM Plex Mono"' }}>
+              {sub}
+            </text>
+          )}
+        </g>
+      );
+    }
+
+    function FlowDiagram({ stepHighlight }) {
+      const all = stepHighlight === 'all';
+      const hk = all || stepHighlight === 'kconfig';
+      const hm = all || stepHighlight === 'menuconfig';
+      const hc = all || stepHighlight === 'config';
+
+      const dimK = !hk && stepHighlight !== 'all';
+      const dimM = !hm && stepHighlight !== 'all';
+      const dimC = !hc && stepHighlight !== 'all';
+
+      return (
+        <svg viewBox="0 0 720 280" className="w-full max-w-3xl mx-auto" role="img" aria-label="Kconfig 到 menuconfig 再到 dot config 与构建的数据流">
+          <SvgDefs />
+          <rect x="16" y="12" width="688" height="256" rx="12" fill="color-mix(in srgb, var(--accent) 5%, transparent)" stroke="var(--border)" strokeWidth="1" strokeDasharray="6 3" opacity={0.6} />
+          <text x="28" y="32" fill="var(--text-tertiary)" style={{ fontSize: '10px', fontWeight: 600, fontFamily: '"IBM Plex Mono"', letterSpacing: '0.06em' }}>
+            CONFIGURATION PIPELINE
+          </text>
+
+          <NodeBox x={40} y={72} w={168} h={72} label="Kconfig 树" sub="定义 · 依赖 · 菜单" color="var(--purple)" dim={dimK && stepHighlight !== 'all'} active={hk} />
+          <NodeBox x={276} y={72} w={168} h={72} label="menuconfig" sub="解析 · 交互 · 校验" color="var(--amber)" dim={dimM && stepHighlight !== 'all'} active={hm} />
+          <NodeBox x={512} y={72} w={168} h={72} label=".config" sub="CONFIG_* 赋值" color="var(--teal)" dim={dimC && stepHighlight !== 'all'} active={hc} />
+
+          <line x1={208} y1={108} x2={276} y2={108} stroke={hk && hm ? 'var(--accent)' : 'var(--border-light)'} strokeWidth={1.5} markerEnd={hk && hm ? 'url(#arrow-accent)' : 'url(#arrow)'} className={hk && hm ? 'flow-line' : undefined} style={{ transition: 'stroke 0.2s ease' }} />
+          <text x={242} y={98} textAnchor="middle" fill="var(--text-tertiary)" style={{ fontSize: '10px', fontFamily: '"IBM Plex Mono"' }}>读取定义</text>
+
+          <line x1={444} y1={108} x2={512} y2={108} stroke={hm && hc ? 'var(--accent)' : 'var(--border-light)'} strokeWidth={1.5} markerEnd={hm && hc ? 'url(#arrow-accent)' : 'url(#arrow)'} className={hm && hc ? 'flow-line' : undefined} style={{ transition: 'stroke 0.2s ease' }} />
+          <text x={478} y={98} textAnchor="middle" fill="var(--text-tertiary)" style={{ fontSize: '10px', fontFamily: '"IBM Plex Mono"' }}>保存</text>
+
+          <NodeBox x={276} y={188} w={328} h={64} label="构建 / 代码生成" sub="读取 .config → 编译宏、rtconfig.h 等" color="var(--accent)" dim={!all} active={all} />
+          <path d="M 596 144 L 596 166 Q 596 188 520 188" fill="none" stroke={all ? 'var(--teal)' : 'var(--border-light)'} strokeWidth={1.5} markerEnd={all ? 'url(#arrow-teal)' : 'url(#arrow)'} className={all ? 'flow-line' : undefined} />
+          <text x={648} y={168} textAnchor="end" fill="var(--text-tertiary)" style={{ fontSize: '10px', fontFamily: '"IBM Plex Mono"' }}>消费</text>
+        </svg>
+      );
+    }
+
+    function StepPill({ n, active, onClick }) {
+      return (
+        <button
+          type="button"
+          onClick={onClick}
+          className={`min-w-[2rem] h-9 px-3 rounded-lg font-mono text-sm font-medium transition-colors duration-200 border ${
+            active ? 'bg-accent-soft border-accent text-accent' : 'bg-surface-alt border-border text-text-secondary hover:border-border-light'
+          }`}
+        >
+          {n + 1}
+        </button>
+      );
+    }
+
+    function App() {
+      const [current, setCurrent] = useState(0);
+      const step = STEPS[current];
+
+      return (
+        <div className="min-h-screen p-6 md:p-12 max-w-5xl mx-auto">
+          <header className="mb-8">
+            <h1 className="text-2xl font-semibold text-text tracking-tight">Kconfig、menuconfig 与 .config</h1>
+            <p className="mt-2 text-sm text-text-secondary max-w-2xl leading-relaxed">
+              三者分工：Kconfig 描述「可选项与规则」，menuconfig 是编辑这些选项的界面并写出结果，.config 保存当前选择供构建使用。
+            </p>
+          </header>
+
+          <div className="flex flex-wrap items-center gap-2 mb-6">
+            {STEPS.map((s, i) => (
+              <StepPill key={s.id} n={i} active={i === current} onClick={() => setCurrent(i)} />
+            ))}
+            <span className="text-text-tertiary text-xs font-mono ml-2">点击步骤切换说明</span>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-8 items-start">
+            <div className="rounded-xl border border-border bg-surface p-4 md:p-6">
+              <FlowDiagram stepHighlight={step.highlight} />
+            </div>
+
+            <div className="min-h-[200px]">
+              <div key={step.id} className="step-panel">
+                <h2 className="text-lg font-semibold text-text mb-3">{step.title}</h2>
+                <p className="text-sm text-text-secondary leading-relaxed">{step.body}</p>
+              </div>
+            </div>
+          </div>
+
+          <footer className="mt-10 pt-6 border-t border-border">
+            <p className="text-xs text-text-tertiary font-mono leading-relaxed">
+              与 Linux 内核、Buildroot、RT-Thread Env 等工具链中的用法一致：名称可能略有差异（如 rtconfig.h），但「Kconfig 定义 → 配置前端 → .config → 构建」链条相同。
+            </p>
+          </footer>
+        </div>
+      );
+    }
+
+    const el = document.getElementById('root');
+    if (typeof ReactDOM.createRoot === 'function') {
+      ReactDOM.createRoot(el).render(<App />);
+    } else {
+      ReactDOM.render(<App />, el);
+    }
+  </script>
+</body>
+</html>
