@@ -10,7 +10,8 @@
 *.idb
 *.ilk
 *.old
-build
+/build/
+.venv/
 Debug
 documentation/html
 packages/
