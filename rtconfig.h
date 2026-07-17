@@ -1,9 +1,6 @@
 #ifndef RT_CONFIG_H__
 #define RT_CONFIG_H__
 
-#define SOC_STM32F446ZE
-#define BOARD_STM32F446_NUCLEO
-
 /* RT-Thread Kernel */
 
 /* klibc options */
@@ -105,7 +102,7 @@
 #define RT_USING_CONSOLE
 #define RT_CONSOLEBUF_SIZE 128
 #define RT_CONSOLE_DEVICE_NAME "uart1"
-#define RT_VER_NUM 0x50201
+#define RT_VER_NUM 0x50200
 #define RT_BACKTRACE_LEVEL_MAX_NR 32
 /* end of RT-Thread Kernel */
 #define RT_USING_HW_ATOMIC
@@ -300,6 +297,10 @@
 
 /* end of Kendryte SDK */
 
+/* MM32 HAL & SDK Drivers */
+
+/* end of MM32 HAL & SDK Drivers */
+
 /* WCH HAL & SDK Drivers */
 
 /* end of WCH HAL & SDK Drivers */
@@ -323,6 +324,18 @@
 /* GD32 Drivers */
 
 /* end of GD32 Drivers */
+
+/* HPMicro SDK */
+
+/* end of HPMicro SDK */
+
+/* FT32 HAL & SDK Drivers */
+
+/* end of FT32 HAL & SDK Drivers */
+
+/* NOVOSNS Drivers */
+
+/* end of NOVOSNS Drivers */
 /* end of HAL & SDK Drivers */
 
 /* sensors drivers */
@@ -404,7 +417,6 @@
 /* end of RT-Thread online packages */
 #define SOC_FAMILY_STM32
 #define SOC_SERIES_STM32F4
-#define BOARD_SERIES_STM32_NUCLEO_144
 
 /* Hardware Drivers Config */
 
@@ -421,5 +433,6 @@
 /* Board extended module Drivers */
 
 /* end of Hardware Drivers Config */
+#define SOC_STM32F446RETX
 
 #endif

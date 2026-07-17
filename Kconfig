@@ -4,6 +4,10 @@ source "$RTT_ROOT/Kconfig"
 source "$PKGS_ROOT/Kconfig"
 rsource "libraries/Kconfig"
 
+if !RT_USING_NANO
+rsource "board/Kconfig"
+endif
+
 config SOC_STM32F446RETX
     bool
     select SOC_SERIES_STM32F4
