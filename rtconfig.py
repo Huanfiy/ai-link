@@ -89,4 +89,7 @@ CXXFLAGS = CFLAGS
 CPATH    = ''
 LPATH    = ''
 
-POST_ACTION = f'{OBJCPY} -O binary $TARGET {OUTPUT_DIR}/{PROJECT_NAME}.bin\n{SIZE} $TARGET\n'
+POST_ACTION = (
+    f'{OBJCPY} -O binary $TARGET {OUTPUT_DIR}/{PROJECT_NAME}.bin\n'
+    f'python3 tools/build/report_firmware_info.py --mode={BUILD_MODE} --ldscript={LDSCRIPT} $TARGET\n'
+)
