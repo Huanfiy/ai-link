@@ -1,6 +1,6 @@
 ---
 name: rttenv
-description: Operate and diagnose the RT-Thread Env v2 toolchain for the ailink BSP on this Linux/zsh workstation. Use for Env activation, Kconfig/menuconfig, package synchronization, RT-Thread SDK or compiler discovery, and SCons builds.
+description: Operate and diagnose the RT-Thread Env v2 toolchain for the ailink BSP on this Linux/zsh workstation. Use this skill only when the user explicitly asks Codex to use the rttenv skill (including `$rttenv`); never auto-trigger it merely because a task involves RT-Thread Env, Kconfig/menuconfig, package synchronization, SDK or compiler discovery, or SCons builds.
 ---
 
 # RT-Thread Env
