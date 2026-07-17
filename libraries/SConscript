@@ -1,0 +1,4 @@
+from building import *
+
+group = SConscript('HAL_Drivers/SConscript')
+Return('group')

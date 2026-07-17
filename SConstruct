@@ -1,79 +1,39 @@
 import os
 import sys
+
+# rtconfig owns the environment contract; importing it validates host, toolchain and RTT_ROOT.
 import rtconfig
 
-if os.getenv('RTT_ROOT'):
-    RTT_ROOT = os.getenv('RTT_ROOT')
-else:
-    # 工程不在 rt-thread/bsp 树下时，默认使用本机 SDK；仍可用 RTT_ROOT 覆盖。
-    _default_sdk = os.path.expanduser('~/SDK/rt-thread')
-    if os.path.isdir(os.path.join(_default_sdk, 'tools')):
-        RTT_ROOT = os.path.normpath(_default_sdk)
-    else:
-        RTT_ROOT = os.path.normpath(os.getcwd() + '/../../..')
+rtconfig.logi(f'{rtconfig.BUILD_MODE} build: {rtconfig.OUTPUT_DIR}/{rtconfig.PROJECT_NAME}.{rtconfig.TARGET_EXT}')
 
-sys.path = sys.path + [os.path.join(RTT_ROOT, 'tools')]
-try:
-    from building import *
-except:
-    print('Cannot found RT-Thread root directory, please check RTT_ROOT')
-    print(RTT_ROOT)
-    exit(-1)
+# ---- RT-Thread build framework ----
+BSP_ROOT = os.getcwd()
+RTT_ROOT = rtconfig.RTT_ROOT
 
-def bsp_pkg_check():
-    import subprocess
+sys.path.insert(0, os.path.join(RTT_ROOT, 'tools'))
+from building import *
 
-    check_paths = [
-        os.path.join("packages", "CMSIS-Core-latest"),
-        os.path.join("packages", "stm32f4_cmsis_driver-latest"),
-        os.path.join("packages", "stm32f4_hal_driver-latest")
-    ]
-
-    need_update = not all(os.path.exists(p) for p in check_paths)
-
-    if need_update:
-        print("\n===============================================================================")
-        print("Dependency packages missing, please running 'pkgs --update'...")
-        print("If no packages are fetched, run 'pkgs --upgrade' first, then 'pkgs --update'...")
-        print("===============================================================================")
-        exit(1)
-
-RegisterPreBuildingAction(bsp_pkg_check)
-
-TARGET = 'rt-thread.' + rtconfig.TARGET_EXT
-
+# ---- GNU build environment ----
 DefaultEnvironment(tools=[])
-env = Environment(tools = ['mingw'],
-    AS = rtconfig.AS, ASFLAGS = rtconfig.AFLAGS,
-    CC = rtconfig.CC, CFLAGS = rtconfig.CFLAGS,
-    AR = rtconfig.AR, ARFLAGS = '-rc',
-    CXX = rtconfig.CXX, CXXFLAGS = rtconfig.CXXFLAGS,
-    LINK = rtconfig.LINK, LINKFLAGS = rtconfig.LFLAGS)
+env = Environment(tools=['gcc', 'g++', 'gnulink', 'ar', 'gas'],
+                  AS   = rtconfig.AS,   ASFLAGS   = rtconfig.AFLAGS,
+                  CC   = rtconfig.CC,   CFLAGS    = rtconfig.CFLAGS,
+                  CXX  = rtconfig.CXX,  CXXFLAGS  = rtconfig.CXXFLAGS,
+                  AR   = rtconfig.AR,   ARFLAGS   = '-rc',
+                  LINK = rtconfig.LINK, LINKFLAGS = rtconfig.LFLAGS)
 env.PrependENVPath('PATH', rtconfig.EXEC_PATH)
+Export('env', 'RTT_ROOT', 'rtconfig')
 
-if rtconfig.PLATFORM in ['iccarm']:
-    env.Replace(CCCOM = ['$CC $CFLAGS $CPPFLAGS $_CPPDEFFLAGS $_CPPINCFLAGS -o $TARGET $SOURCES'])
-    env.Replace(ARFLAGS = [''])
-    env.Replace(LINKCOM = env["LINKCOM"] + ' --map rt-thread.map')
+# ---- BSP sources & build ----
+def check_bsp_packages():
+    # runs from DoBuilding, not at read time: `scons --menuconfig` stays usable before `pkgs --update`
+    for package in ('CMSIS-Core-latest', 'stm32f4_cmsis_driver-latest', 'stm32f4_hal_driver-latest'):
+        if not os.path.isdir(os.path.join(BSP_ROOT, 'packages', package)):
+            rtconfig.fail(f'missing BSP package {package}', 'run `pkgs --update` in the BSP root (RT-Thread Env)')
 
-Export('env')
-Export('RTT_ROOT')
-Export('rtconfig')
+RegisterPreBuildingAction(check_bsp_packages)
 
-SDK_ROOT = os.path.abspath('./')
+objects = PrepareBuilding(env, RTT_ROOT, has_libcpu=False)
 
-if os.path.exists(SDK_ROOT + '/libraries'):
-    libraries_path_prefix = SDK_ROOT + '/libraries'
-else:
-    libraries_path_prefix = os.path.dirname(SDK_ROOT) + '/libraries'
-
-# prepare building environment
-objs = PrepareBuilding(env, RTT_ROOT, has_libcpu=False)
-
-rtconfig.BSP_LIBRARY_TYPE = None
-
-# include drivers
-objs.extend(SConscript(os.path.join(libraries_path_prefix, 'HAL_Drivers', 'SConscript'),variant_dir='build/libraries/HAL_Drivers', duplicate=0))
-
-# make a building
-DoBuilding(TARGET, objs)
+TARGET = os.path.join(rtconfig.OUTPUT_DIR, f'{rtconfig.PROJECT_NAME}.{rtconfig.TARGET_EXT}')
+DoBuilding(TARGET, objects)
