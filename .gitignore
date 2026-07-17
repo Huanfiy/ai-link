@@ -33,7 +33,7 @@ Midea-X1
 GPATH
 GRTAGS
 GTAGS
-.vscode
+/.vscode
 JLinkLog.txt
 JLinkSettings.ini
 DebugConfig/

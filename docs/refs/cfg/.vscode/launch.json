@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "debug-load",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/ailink.elf",
+      "request": "launch",
+      "type": "cortex-debug",
+      "device": "STM32F446ZE",
+      "servertype": "openocd",
+      "configFiles": [
+        "interface/stlink.cfg",
+        "target/stm32f4x.cfg"
+      ],
+      "interface": "swd",
+      "runToEntryPoint": "main", // 在 main 函数处停止,可根据需要注释
+      "showDevDebugOutput": "parsed"
+    },
+    {
+      "name": "debug-attach",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/ailink.elf",
+      "request": "attach",
+      "type": "cortex-debug",
+      "device": "STM32F446ZE",
+      "servertype": "openocd",
+      "configFiles": [
+        "interface/stlink.cfg",
+        "target/stm32f4x.cfg"
+      ],
+      "interface": "swd",
+      "showDevDebugOutput": "parsed"
+    }
+  ]
+}

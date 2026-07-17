@@ -1,0 +1,18 @@
+{
+  // C/C++ 语义引擎统一用 clangd;索引与交叉编译配置以根目录 .clangd 为准
+  "C_Cpp.intelliSenseEngine": "disabled",
+  "clangd.enable": true,
+  "clangd.arguments": [
+    "--header-insertion=never",
+    "--completion-style=detailed",
+    "--background-index",
+    "--clang-tidy"
+  ],
+  "[c]": {
+    "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+  },
+  "[cpp]": {
+    "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+  },
+  "git.ignoreLimitWarning": true
+}
