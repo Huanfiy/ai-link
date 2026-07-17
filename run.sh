@@ -178,13 +178,7 @@ cmd_flash() {
         -c "program $bin_path $FLASH_ADDR verify reset exit"
     )
 
-    if [[ "$VERBOSE" -eq 1 ]]; then
-        openocd "${openocd_args[@]}" || die "Flashing failed (OpenOCD error)."
-    else
-        # OpenOCD logs to stderr; keep it quiet on success, dump on failure.
-        local log
-        log=$(openocd "${openocd_args[@]}" 2>&1) || { echo "$log" >&2; die "Flashing failed (OpenOCD error)."; }
-    fi
+    openocd "${openocd_args[@]}" || die "Flashing failed (OpenOCD error)."
 
     log_success "Flash complete."
 }
@@ -204,7 +198,7 @@ Commands:
 Options:
   --debug,    -d      Debug mode (-O0 -g)
   --release,  -r      Release mode (-Os -DNDEBUG) [Default]
-  --verbose,  -v      Show full SCons/OpenOCD output (quiet by default)
+  --verbose,  -v      Show full SCons build output (flash output is always shown)
 
 Environment:
   RTT_ROOT            RT-Thread source root      [$RTT_ROOT]
