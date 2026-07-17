@@ -35,6 +35,10 @@ GRTAGS
 GTAGS
 /.vscode
 /.clangd
+/.claude/
+/.codex/
+/.cursor/
+/.gemini/
 JLinkLog.txt
 JLinkSettings.ini
 DebugConfig/
