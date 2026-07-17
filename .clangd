@@ -1,0 +1,10 @@
+CompileFlags:
+  CompilationDatabase: .vscode
+  Compiler: /home/huan/toolchain/arm-eabi-toolchain/bin/arm-none-eabi-gcc
+  Add:
+    - --target=arm-none-eabi
+    - --sysroot=/home/huan/toolchain/arm-eabi-toolchain/arm-none-eabi
+    - -std=gnu17
+
+Diagnostics:
+  Suppress: ["pp_including_mainfile_in_preamble"]
