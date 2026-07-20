@@ -14,17 +14,17 @@
 
 | 通道 | 主机侧 | 设备侧 | 说明 |
 | --- | --- | --- | --- |
-| 串口 A | `/dev/ttyACM*`（by-id `if00`） | USART6，PC6=TX / PC7=RX | 上限 11.25 M；≤4 M 回环实测达线速 99%，≥6 M 受 USB FS 总线限制约 568 KB/s |
+| 串口 A | `/dev/ttyACM*`（by-id `if00`） | USART6，PC6=TX / PC7=RX | 上限 11.25 M；最新吞吐与完整性基线见性能测试报告 |
 | 串口 B | `/dev/ttyACM*`（by-id `if02`） | USART1，PA9=TX / PA10=RX | 同上（两路同为 APB2 90 MHz 时钟域） |
 | GPIO | `ailink-gpio.py` | bit 0–7 = PB0 / PB1 / PB2 / PB8 / PB9 / PB10 / PA1 / PA8 | EP0 vendor request，不占用串口与调试通道 |
-| 调试器 | pyOCD / OpenOCD | SWCLK=PA4 / SWDIO=PA5 / nRESET=PA6 | CMSIS-DAP v2，实测 SWD 2 MHz 下 halt / 读写内存通过（10 cm 杜邦线连外部 STM32F407 目标） |
+| 调试器 | pyOCD / OpenOCD | SWCLK=PA4 / SWDIO=PA5 / nRESET=PA6 | CMSIS-DAP v2；最新 SWD 时钟与内存吞吐基线见性能测试报告 |
 
 - 四路通道可并发使用；固件控制台独立走 UART2（PA2=TX / PA3=RX，115200 8N1），不参与桥接。
 - 序列号取 MCU 96-bit UID，`/dev/serial/by-id/` 路径跨板稳定。
-- 固件升级免调试器：`ailink-ota.py flash` 一条命令走 ROM DFU 直刷（约 20–30 s，期间设备离线）；升级中断不变砖，自研 boot 校验失败自动回落 DFU，重跑命令即救回。
-- 已知边界：串口无 RTS/CTS 硬件流控，主机连续写入需限制在飞字节数（见 `bench.py --window`，设备侧 RX 环每通道 8 KB）；USB FS 总线有效载荷实测约 1.14 MB/s 聚合，双路双向同时打满会超出物理带宽。
+- 固件升级免调试器：`ailink-ota.py flash` 一条命令走 ROM DFU 直刷，期间设备离线；升级中断不变砖，自研 boot 校验失败自动回落 DFU，重跑命令即救回。
+- 已知边界：串口无 RTS/CTS 硬件流控，主机连续写入需限制在飞字节数（见 `bench.py --window`，设备侧 RX 环每通道 8 KB）；双路串口与 DAP 共享 USB FS 总线带宽。
 
-端点映射、描述符布局、FIFO 分区与完整性能数据见 [docs/design/usb-bridge.md](docs/design/usb-bridge.md)；升级与救砖链路见 [docs/design/ota.md](docs/design/ota.md)。
+最新 DAPLink、双路串口与固件升级性能见 [performance-report.md](performance-report.md)；端点映射、描述符布局与 FIFO 分区见 [docs/design/usb-bridge.md](docs/design/usb-bridge.md)；升级与救砖链路见 [docs/design/ota.md](docs/design/ota.md)。
 
 ## 构建与烧录
 
@@ -81,7 +81,8 @@ run.sh         构建与烧录入口
 
 ## 相关文档
 
-- [docs/design/usb-bridge.md](docs/design/usb-bridge.md)：USB 复合设备设计事实（协议、端点、性能边界）。
+- [performance-report.md](performance-report.md)：当前有效性能基线（DAPLink、双路串口、固件升级）。
+- [docs/design/usb-bridge.md](docs/design/usb-bridge.md)：USB 复合设备设计事实（协议、端点、带宽约束）。
 - [docs/design/ota.md](docs/design/ota.md)：固件升级与救砖链路（分区、`.fw_info`、boot 行为、恢复路径）。
 - [AGENTS.md](AGENTS.md)：AI 协作速查（环境、命令、目录、注意事项）。
 - [code-rules.md](code-rules.md) / [docs-rules.md](docs-rules.md)：编码规范与文档治理规则。
