@@ -75,5 +75,11 @@ F446 OTG_FS 有 EP0 + 5 对端点，全部用满：
 
 ## 已验证与未决
 
-- 枚举：Linux 识别 `1209:0010` 五接口复合设备，`cdc_acm` 绑出两个 ttyACM，BOS/MSOSv2 描述符读取正常，FIFO 六分区按预期生效（fifo1–5 offset 连续），dwc2 报告 6 端点。
-- 待验证：双路回环吞吐（含 11.25 M 突发档）、DAP 连目标板、GPIO 工具、Windows 侧免驱枚举（本机无 Windows，遗留）。
+2026-07-21 上板验证（Linux 主机）：
+
+- 枚举：`1209:0010` 五接口复合设备，`cdc_acm` 绑出两个 ttyACM（`/dev/serial/by-id/` 含 UID 序列号），BOS/MSOSv2 描述符读取正常，FIFO 六分区按预期生效（fifo1–5 offset 连续），dwc2 报告 6 端点。
+- CDC 控制面：stty 设 921600（A）/2 M（B）经 SET_LINE_CODING 到达泵线程（`usbbr_stat` 线路参数与 seq 递增一致）；host→device 数据路（OUT 槽→UART TX DMA）计数正确、无 NAK 反压残留。
+- CMSIS-DAP：pyOCD 识别为 CMSIS-DAP v2 探针；经 SWD（PA4/PA5/PA6）连外部 STM32F407 目标（IDCODE 0x10076413），1 MHz 与 2 MHz 下 halt / 读 CPUID（0x410fc241）/ RAM 读写 / resume 全通过，OTA 重枚举后复测正常。
+- GPIO：`ailink-gpio.py dir/set/get` 全通过（方向掩码与电平回读一致）。
+- OTA 与四路共存：完整升级回环 + 截断救砖通过（详见 [ota.md](ota.md)）。
+- 待验证（遗留）：双路串口回环吞吐与完整性（含 11.25 M 突发档）——需跳线 PC6↔PA10、PA9↔PC7 后跑 `bench.py`；Windows 侧免驱枚举与 WinUSB 自动绑定（本机无 Windows）。

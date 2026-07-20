@@ -95,5 +95,9 @@ DFU 设备权限由 `tools/host/99-ailink.rules` 解决（`0483:df11` 归 plugde
 
 ## 已验证与未决
 
-- 已验证：boot 校验通过后跳 app（启动日志经 PA2 输出）、`.fw_info` 构建期回填、boot+app 组合烧录（`./run.sh flash-all`）。
-- 待验证：0x63/0x64 端到端升级回环、截断救砖，见 [usb-bridge.md](usb-bridge.md) 验证清单同批执行。
+2026-07-21 上板全链路验收通过：
+
+- 正常链路：boot 校验通过跳 app（PA2 启动日志）、`.fw_info` 构建期回填（bin/ELF 同步）、`./run.sh flash-all` 组合烧录。
+- 升级回环：`ailink-ota.py flash` 全流程——0x64 查版本 → 0x63(wValue=1) 触发（console 打印 `[boot] host DFU request -> ROM DFU`）→ `0483:df11` 枚举 → dfu-util 擦写 122 KB → `:leave` 直跳 app（VTOR 双保险路径）→ 回枚举后 0x64 CRC 比对一致。
+- 截断救砖：刷入 40 KB 截断镜像后复位，boot 判定 `image CRC mismatch` 自动落 ROM DFU；重跑 `ailink-ota.py flash` 识别 DFU 态跳过触发直接刷写救回。
+- 文件系统跨升级持久：elmFAT 内容（`/test.txt`）经两轮 DFU 擦写 app 分区后完好（W25Q64 不在升级链路上，符合设计）。
