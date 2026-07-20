@@ -16,19 +16,33 @@
 #include <rtdevice.h>
 #endif /* RT_USING_NANO */
 
-/* defined the LED2 pin: PB7 */
-#define LED2_PIN    GET_PIN(B, 7)
+/* Onboard RGB LEDs are active-low: LED1=PC0, LED2=PC1, LED3=PC2 ->
+ * drive LOW to light. PC0 doubles as the bootloader fault indicator. */
+#define LED1_PIN    GET_PIN(C, 0)
+#define LED2_PIN    GET_PIN(C, 1)
+#define LED3_PIN    GET_PIN(C, 2)
+
+#define LED_MARQUEE_INTERVAL    150 /* ms per step */
 
 int main(void)
 {
-    /* set LED2 pin mode to output */
-    rt_pin_mode(LED2_PIN, PIN_MODE_OUTPUT);
+    const rt_base_t leds[] = {LED1_PIN, LED2_PIN, LED3_PIN};
+    const rt_size_t led_num = sizeof(leds) / sizeof(leds[0]);
+    rt_size_t i;
 
+    /* all LEDs start off (active-low: HIGH = off) */
+    for (i = 0; i < led_num; i++)
+    {
+        rt_pin_mode(leds[i], PIN_MODE_OUTPUT);
+        rt_pin_write(leds[i], PIN_HIGH);
+    }
+
+    i = 0;
     while (1)
     {
-        rt_pin_write(LED2_PIN, PIN_HIGH);
-        rt_thread_mdelay(500);
-        rt_pin_write(LED2_PIN, PIN_LOW);
-        rt_thread_mdelay(500);
+        rt_pin_write(leds[i], PIN_LOW);                 /* light current LED */
+        rt_thread_mdelay(LED_MARQUEE_INTERVAL);
+        rt_pin_write(leds[i], PIN_HIGH);                /* then turn it off */
+        i = (i + 1) % led_num;                          /* advance to next */
     }
 }
