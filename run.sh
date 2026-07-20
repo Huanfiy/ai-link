@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# ailink BSP Build & Flash Script (RT-Thread / STM32F446ZE)
+# ailink BSP Build & Flash Script (RT-Thread / STM32F446RET6)
 #
 # Usage: ./run.sh [command] [options]
 #
@@ -16,8 +16,8 @@ readonly VENV_DIR=".venv"
 readonly BUILD_DIR="./build"
 readonly PROJECT_NAME="${AILINK_PROJECT_NAME:-ailink}"
 
-# OpenOCD: ST-Link probe by default (Nucleo onboard), override via env,
-# e.g. OPENOCD_INTERFACE=jlink or OPENOCD_INTERFACE=cmsis-dap.
+# OpenOCD: external ST-Link probe on the SWD header by default, override via
+# env, e.g. OPENOCD_INTERFACE=jlink or OPENOCD_INTERFACE=cmsis-dap.
 readonly OPENOCD_INTERFACE="${OPENOCD_INTERFACE:-stlink}"
 readonly OPENOCD_TARGET="${OPENOCD_TARGET:-stm32f4x}"
 readonly FLASH_ADDR="0x08000000"

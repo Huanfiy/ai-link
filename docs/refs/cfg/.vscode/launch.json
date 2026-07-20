@@ -7,7 +7,7 @@
       "executable": "${workspaceFolder}/build/ailink.elf",
       "request": "launch",
       "type": "cortex-debug",
-      "device": "STM32F446ZE",
+      "device": "STM32F446RE",
       "servertype": "openocd",
       "configFiles": [
         "interface/stlink.cfg",
@@ -23,7 +23,7 @@
       "executable": "${workspaceFolder}/build/ailink.elf",
       "request": "attach",
       "type": "cortex-debug",
-      "device": "STM32F446ZE",
+      "device": "STM32F446RE",
       "servertype": "openocd",
       "configFiles": [
         "interface/stlink.cfg",
