@@ -1,0 +1,13 @@
+# ailink USB bridge (dual CDC ACM + CMSIS-DAP v2, 1209:0010)
+# Install: sudo ./install.sh
+#          (or manually: cp to /etc/udev/rules.d/, udevadm control --reload,
+#          then replug the device)
+
+# Grant plugdev access so ailink-gpio.py / ailink-ota.py / pyOCD (pyusb)
+# work without sudo. cdc_acm binds the serial functions by itself; the DAP
+# interface is vendor-specific and stays driverless on Linux.
+SUBSYSTEM=="usb", ATTR{idVendor}=="1209", ATTR{idProduct}=="0010", ATTR{product}=="ailink USB bridge", MODE="0664", GROUP="plugdev"
+
+# STM32 ROM DFU (the device passes through here during ailink-ota.py flash
+# and when the bootloader falls back after a broken app image).
+SUBSYSTEM=="usb", ATTR{idVendor}=="0483", ATTR{idProduct}=="df11", MODE="0664", GROUP="plugdev"
