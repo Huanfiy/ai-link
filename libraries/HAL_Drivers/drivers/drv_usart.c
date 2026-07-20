@@ -156,7 +156,28 @@ static rt_err_t stm32_configure(struct rt_serial_device *serial, struct serial_c
     uart->handle.Init.BaudRate     = cfg->baud_rate;
     uart->handle.Init.Mode         = UART_MODE_TX_RX;
 #ifdef USART_CR1_OVER8
-    uart->handle.Init.OverSampling = cfg->baud_rate > 5000000 ? UART_OVERSAMPLING_8 : UART_OVERSAMPLING_16;
+    {
+        /* OVER16 reaches at most pclk/16; switch to OVER8 beyond that so the
+         * pclk/16 .. pclk/8 range works (e.g. 11.25M on a 90MHz APB2 bus),
+         * instead of a fixed 5M threshold that only fits some instances. */
+        rt_uint32_t pclk;
+
+#if defined(USART6)
+        if (uart->handle.Instance == USART1 || uart->handle.Instance == USART6)
+#else
+        if (uart->handle.Instance == USART1)
+#endif
+        {
+            pclk = HAL_RCC_GetPCLK2Freq();
+        }
+        else
+        {
+            pclk = HAL_RCC_GetPCLK1Freq();
+        }
+        uart->handle.Init.OverSampling = ((rt_uint64_t)cfg->baud_rate * 16U > pclk)
+                                             ? UART_OVERSAMPLING_8
+                                             : UART_OVERSAMPLING_16;
+    }
 #else
     uart->handle.Init.OverSampling = UART_OVERSAMPLING_16;
 #endif /* USART_CR1_OVER8 */
