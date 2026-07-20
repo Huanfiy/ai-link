@@ -8,7 +8,7 @@ ailink 是基于 RT-Thread 的 STM32F446 固件工程。
 
 | 项 | 内容 |
 | --- | --- |
-| MCU | STM32F446（Cortex-M4F，硬件 FPU）；Kconfig 当前选择 `SOC_STM32F446RETX` |
+| MCU | STM32F446RET6 核心板（LQFP64，Cortex-M4F，硬件 FPU，HSE 8MHz + LSE 32.768kHz）；Kconfig 选择 `SOC_STM32F446RETX` |
 | RTOS | RT-Thread v5.2.0（源码在仓库外 `$RTT_ROOT`，默认 `~/SDK/rt-thread`） |
 | 控制台 | UART1（RT-Thread 设备名 `uart1`） |
 | 构建系统 | SCons + `run.sh` 封装 |
@@ -47,7 +47,7 @@ ailink 是基于 RT-Thread 的 STM32F446 固件工程。
 
 - 默认 Release（`-Os -DNDEBUG`），Debug 为 `-O0 -g`；优化选项以 `rtconfig.py` 为准。
 - 产物：`build/ailink.elf` / `.bin` / `.map`；链接后由 `tools/build/report_firmware_info.py` 输出内存占用报告。
-- 烧录默认走 ST-Link（Nucleo 板载探针）；`compile_commands.json` 由 bear 生成后自动移入 `.vscode/`。
+- 烧录默认走外接 ST-Link（核心板 SWD 排针，无板载探针）；`compile_commands.json` 由 bear 生成后自动移入 `.vscode/`。
 - 配置变更用 `scons --menuconfig`（更新 `.config` 与 `rtconfig.h`，两者入库，勿手改 `rtconfig.h`）；新增软件包后执行 `pkgs --update`。
 
 ## 目录结构
