@@ -11,12 +11,18 @@
  *
  * USB -> UART (OUT): 8 slots of 64B per channel form a ring. The OUT-complete
  * ISR immediately re-arms the next free slot (no thread round-trip); the pump
- * thread queues filled slots into the UART TX DMA and slots are freed by the
- * TX-complete callback. When all slots are busy the OUT endpoint stays
- * un-armed and the host sees NAK backpressure.
+ * thread coalesces filled slots into a 512B staging buffer, frees them right
+ * away and hands the serial layer exactly one DMA node at a time (next batch
+ * submitted from the TX-complete callback path). Keeping the serial v1 TX
+ * data queue at depth <= 1 sidesteps its push-vs-DMADONE race (a lost
+ * completion wedges the queue forever, observed as a hard TX stall at 2M+),
+ * and lets baud reconfiguration quiesce TX cleanly. When all slots are busy
+ * the OUT endpoint stays un-armed and the host sees NAK backpressure.
  *
  * Baud/format changes recorded by cdc_proto.c (USB ISR) are applied here in
- * thread context, since HAL_UART_Init must not run in an ISR.
+ * thread context, since HAL_UART_Init must not run in an ISR; the pump defers
+ * them until the in-flight TX node (if any) completes, so reconfiguration
+ * never kills an active DMA (another lost-completion path).
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -27,7 +33,8 @@
 #include "usb_bridge.h"
 
 #define PUMP_IN_BUF_SIZE   512U /* one bulk transfer, 8 packets */
-#define PUMP_OUT_SLOTS     8U   /* 64B OUT slots, matches serial DMA queue depth */
+#define PUMP_OUT_SLOTS     8U   /* 64B OUT slots */
+#define PUMP_TX_STAGE_SIZE (PUMP_OUT_SLOTS * USB_BRIDGE_BULK_MPS)
 
 #define PUMP_EV_USB_OUT   (1U << 0) /* one or more OUT slots filled */
 #define PUMP_EV_USB_IN    (1U << 1) /* IN transfer completed */
@@ -40,8 +47,7 @@
 enum pump_slot_state {
     SLOT_FREE = 0,   /* available for usbd_ep_start_read */
     SLOT_ARMED,      /* owned by the USB core, read in progress */
-    SLOT_READY,      /* holds host data, waiting for UART queueing */
-    SLOT_QUEUED,     /* sitting in the UART TX DMA queue */
+    SLOT_READY,      /* holds host data, waiting for TX staging */
 };
 
 struct bridge_pump {
@@ -56,18 +62,20 @@ struct bridge_pump {
     rt_device_t uart;
     struct rt_event ev;
 
-    /* USB -> UART ring; slots advance FREE -> ARMED -> READY -> QUEUED -> FREE
-     * strictly in ring order, tracked by three cursors.
+    /* USB -> UART ring; slots advance FREE -> ARMED -> READY -> FREE
+     * strictly in ring order (freed when copied into the TX stage).
      * dwc2 requires 4-byte aligned transfer buffers. */
     uint8_t out_buf[PUMP_OUT_SLOTS][USB_BRIDGE_BULK_MPS] __attribute__((aligned(4)));
     volatile uint8_t out_state[PUMP_OUT_SLOTS];
     volatile uint8_t out_len[PUMP_OUT_SLOTS];
     volatile uint8_t out_arm_idx;   /* next slot to arm (ISR owned) */
-    uint8_t out_drain_idx;          /* next slot to hand to UART (thread owned) */
-    uint8_t out_free_idx;           /* oldest QUEUED slot, freed on TX-done */
+    uint8_t out_drain_idx;          /* next slot to stage (thread owned) */
     volatile uint8_t out_stalled;   /* no free slot at last completion: host NAKed */
-    volatile uint32_t tx_done_count; /* UART DMA nodes consumed (callback) */
-    uint32_t tx_reaped;              /* thread-side match for tx_done_count */
+
+    /* single in-flight TX node: READY slots coalesce here, the serial v1 TX
+     * data queue never holds more than this one buffer (see header comment) */
+    uint8_t tx_stage[PUMP_TX_STAGE_SIZE] __attribute__((aligned(4)));
+    volatile uint8_t tx_inflight;
 
     /* UART -> USB assembly */
     uint8_t in_buf[PUMP_IN_BUF_SIZE] __attribute__((aligned(4)));
@@ -86,6 +94,8 @@ struct bridge_pump {
     uint32_t in_zlps;        /* trailing ZLPs sent */
     uint32_t out_completes;  /* OUT complete callbacks */
     uint32_t in_last_total;  /* size of last IN transfer */
+    uint32_t tx_nodes;       /* TX DMA nodes submitted */
+    uint32_t tx_dones;       /* TX DMA completions observed */
 };
 
 static struct bridge_pump pump_a = {
@@ -226,7 +236,8 @@ static rt_err_t pump_uart_tx_done_a(rt_device_t dev, void *buffer)
 {
     (void)dev;
     (void)buffer;
-    pump_a.tx_done_count++;
+    pump_a.tx_dones++;
+    pump_a.tx_inflight = 0;
     rt_event_send(&pump_a.ev, PUMP_EV_UART_TX);
     return RT_EOK;
 }
@@ -243,7 +254,8 @@ static rt_err_t pump_uart_tx_done_b(rt_device_t dev, void *buffer)
 {
     (void)dev;
     (void)buffer;
-    pump_b.tx_done_count++;
+    pump_b.tx_dones++;
+    pump_b.tx_inflight = 0;
     rt_event_send(&pump_b.ev, PUMP_EV_UART_TX);
     return RT_EOK;
 }
@@ -259,6 +271,10 @@ static void pump_apply_line_cfg(struct bridge_pump *p)
 
     if (seq == p->applied_seq || baud == 0) {
         return;
+    }
+    if (p->tx_inflight) {
+        return; /* defer: reconfig would kill the active TX DMA and its
+                 * completion; retried on the next TX-done event */
     }
 
     if (baud > p->max_baud) {
@@ -295,41 +311,41 @@ static void pump_apply_line_cfg(struct bridge_pump *p)
     p->applied_seq = seq;
 }
 
+/* Coalesce READY slots into the staging buffer and submit one TX DMA node.
+ * Slots free as soon as they are copied, so the OUT endpoint resumes before
+ * the UART is done draining. */
 static void pump_drain_out_slots(struct bridge_pump *p)
 {
-    while (p->out_state[p->out_drain_idx] == SLOT_READY) {
+    uint32_t staged = 0;
+
+    if (p->tx_inflight) {
+        return; /* one node in flight max, next batch on TX-done */
+    }
+
+    while (p->out_state[p->out_drain_idx] == SLOT_READY &&
+           staged + USB_BRIDGE_BULK_MPS <= PUMP_TX_STAGE_SIZE) {
         uint8_t idx = p->out_drain_idx;
         rt_size_t len = p->out_len[idx];
 
-        p->out_state[idx] = SLOT_QUEUED;
-        /* async: pointer enters the serial TX DMA queue (depth 8 >= slots),
-         * slot freed in pump_reap_tx() after the TX-done callback */
-        if (rt_device_write(p->uart, 0, p->out_buf[idx], len) != (rt_ssize_t)len) {
-            p->out_state[idx] = SLOT_FREE; /* uart write failed: drop */
-        } else {
-            p->usb_to_uart_bytes += len;
-        }
+        rt_memcpy(&p->tx_stage[staged], (const void *)p->out_buf[idx], len);
+        staged += len;
+        p->out_state[idx] = SLOT_FREE;
         p->out_drain_idx = (uint8_t)((idx + 1U) % PUMP_OUT_SLOTS);
     }
-}
 
-/* Free QUEUED slots as UART DMA completions arrive; both sides advance in
- * strict ring order, so out_free_idx always points at the oldest one. */
-static void pump_reap_tx(struct bridge_pump *p)
-{
-    while (p->tx_reaped != p->tx_done_count) {
-        if (p->out_state[p->out_free_idx] != SLOT_QUEUED) {
-            /* completion for a buffer not from this ring (cannot happen in
-             * steady state; guard against restart races) */
-            p->tx_reaped = p->tx_done_count;
-            break;
-        }
-        p->out_state[p->out_free_idx] = SLOT_FREE;
-        p->out_free_idx = (uint8_t)((p->out_free_idx + 1U) % PUMP_OUT_SLOTS);
-        p->tx_reaped++;
-    }
     if (p->out_stalled) {
         pump_try_arm_out(p);
+    }
+    if (staged == 0) {
+        return;
+    }
+
+    p->tx_inflight = 1;
+    p->tx_nodes++;
+    if (rt_device_write(p->uart, 0, p->tx_stage, staged) != (rt_ssize_t)staged) {
+        p->tx_inflight = 0; /* uart write failed: drop the batch */
+    } else {
+        p->usb_to_uart_bytes += staged;
     }
 }
 
@@ -360,9 +376,9 @@ static void pump_restart(struct bridge_pump *p)
     }
     p->out_arm_idx = 0;
     p->out_drain_idx = 0;
-    p->out_free_idx = 0;
     p->out_stalled = 0;
-    p->tx_reaped = p->tx_done_count;
+    /* tx_inflight is left alone: an in-flight DMA node completes on its own
+     * and clears it via the TX-done callback */
     p->in_busy = 0;
     if (p->configured) {
         pump_try_arm_out(p);
@@ -388,7 +404,6 @@ static void pump_entry(void *param)
 
         pump_apply_line_cfg(p);
 
-        pump_reap_tx(p);
         pump_drain_out_slots(p);
         pump_send_uart_data(p);
     }
@@ -549,11 +564,11 @@ void bridge_pump_stat(void)
         rt_kprintf("      in: xfers=%u done=%u zlp=%u busy=%u last=%u | out: done=%u stall=%u\n",
                    p->in_xfers, p->in_completes, p->in_zlps, p->in_busy,
                    p->in_last_total, p->out_completes, p->out_stalled);
-        rt_kprintf("      tx: dma_done=%u reaped=%u | slots:", p->tx_done_count, p->tx_reaped);
+        rt_kprintf("      tx: nodes=%u done=%u inflight=%u | slots:",
+                   p->tx_nodes, p->tx_dones, p->tx_inflight);
         for (uint8_t s = 0; s < PUMP_OUT_SLOTS; s++) {
             rt_kprintf(" %u", p->out_state[s]);
         }
-        rt_kprintf(" arm=%u drain=%u free=%u\n",
-                   p->out_arm_idx, p->out_drain_idx, p->out_free_idx);
+        rt_kprintf(" arm=%u drain=%u\n", p->out_arm_idx, p->out_drain_idx);
     }
 }
