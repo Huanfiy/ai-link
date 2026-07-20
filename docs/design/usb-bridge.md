@@ -43,7 +43,7 @@ F446 OTG_FS 有 EP0 + 5 对端点，全部用满：
 
 - `bridge_desc.c`：设备/配置/BOS/MSOSv2/字符串描述符，五接口枚举与初始化入口（`INIT_APP_EXPORT`）。
 - `cdc_proto.c`：CDC 线路参数回调（记录 + seq 递增）、EP0 vendor 分发（GPIO 转发 + OTA 扩展槽 `usb_bridge_register_vendor_ext()`）、msh 诊断命令。
-- `bridge_pump.c`：每通道 1 线程的双向泵。UART→USB 侧从 serial DMA 环形收（每通道 8 KB），单次最多 512 B `usbd_ep_start_write`；USB→UART 侧 8 槽 64 B 环，OUT 完成 ISR 立即重挂空闲槽，满槽时靠 USB NAK 反压。溢出计入 `usbbr_stat`。
+- `bridge_pump.c`：每通道 1 线程的双向泵。UART→USB 侧从 serial DMA 环形收（每通道 8 KB），单次最多 512 B `usbd_ep_start_write`；USB→UART 侧 8 槽 64 B 环，OUT 完成 ISR 立即重挂空闲槽，满槽时靠 USB NAK 反压；就绪槽由泵线程合批进 512 B 暂存区后以**单节点**提交 UART TX DMA（serial v1 的 TX data queue 在多节点并发下存在 push 与 DMADONE 竞态，队列深度 >1 时完成事件丢失会永久停摆——实测 2 M+ 触发，单节点化后消除），波特率重配延迟到节点间隙执行。溢出计入 `usbbr_stat`。
 - `bridge_gpio.c`：8 引脚映射表 `static const`，经 `rt_pin_*` 操作，协议处理在 USB ISR 内（寄存器级操作，微秒量级）。
 - `bridge_dap.c`：EP3 命令-响应泵线程，调用 CMSIS-DAP 参考实现 `DAP_ExecuteCommand`，并提供 `DAP_Info` 标识串回调。
 - `dap/`：ARM CMSIS-DAP 参考源码（`DAP.c`/`SW_DP.c`/`DAP.h`，Apache-2.0）逐字副本，只读；改动只经 `board/ports/DAP_config.h`（SWD 位操作，`DAP_JTAG=0`、`SWO=0`）。
@@ -59,11 +59,21 @@ F446 OTG_FS 有 EP0 + 5 对端点，全部用满：
 - 泵线程调用 `usbd_ep_start_read/write` 时关中断，避免与 USB ISR 竞争 `DIEPEMPMSK` 读改写导致 IN 传输永久停摆。
 - F446 OTG_FS 无 VBUS 检测脚约束：CherryUSB ST glue 按 `STM32F446xx` 自动置 `b_session_valid_override`，无需板级处理。
 
-## 性能边界
+## 性能边界（2026-07-21 实测）
 
-- USB FS 总线有效载荷约 1 MB/s 共享：双路双向同时打满超物理带宽，突发/非对称负载正常。
-- 无串口硬件流控（RTS/CTS 不引出）：主机侧连续写需窗口限流（在飞字节数低于设备 RX 环大小），否则设备 RX 环溢出丢数据，`bench.py --window` 即为此设。
-- 实测数据见「已验证与未决」。
+单通道自环（`bench.py`，8N1，window 2048，另一通道空闲）两路结果一致：
+
+| 波特率 | 吞吐 | 达线速 | 瓶颈 |
+| ---- | ---- | ---- | ---- |
+| 1 M | 99.3 KB/s | 99% | 线速 |
+| 2 M | 197.3 KB/s | 99% | 线速 |
+| 4 M | 397.5 KB/s | 99% | 线速 |
+| 6 M | 569.6 KB/s | 95% | 线速→USB 过渡 |
+| 8 M / 11.25 M | ≈568 KB/s | — | USB FS 总线 |
+
+- 回环路径每字节过总线两次（OUT+IN），≈568 KB/s×2 ≈ 1.14 MB/s 聚合即 FS bulk 实际上限，故 ≥6 M 后吞吐平台化；window 加大到 4096/6144 无增益（瓶颈在总线不在窗口）。单向应用（只收或只发）理论可获得更高单通道速率。
+- 11.25 M 下 5 MB 长稳无丢字节无错序；请求 12 M 被 clamp 到 11.25 M（计数器可见），自环下完整性不受影响。
+- 无串口硬件流控（RTS/CTS 不引出）：主机侧连续写需窗口限流（在飞字节数低于设备 RX 环 8 KB），否则设备 RX 环溢出丢数据，`bench.py --window` 即为此设。
 
 ## 主机侧交付物（tools/host/）
 
@@ -82,4 +92,5 @@ F446 OTG_FS 有 EP0 + 5 对端点，全部用满：
 - CMSIS-DAP：pyOCD 识别为 CMSIS-DAP v2 探针；经 SWD（PA4/PA5/PA6）连外部 STM32F407 目标（IDCODE 0x10076413），1 MHz 与 2 MHz 下 halt / 读 CPUID（0x410fc241）/ RAM 读写 / resume 全通过，OTA 重枚举后复测正常。
 - GPIO：`ailink-gpio.py dir/set/get` 全通过（方向掩码与电平回读一致）。
 - OTA 与四路共存：完整升级回环 + 截断救砖通过（详见 [ota.md](ota.md)）。
-- 待验证（遗留）：双路串口回环吞吐与完整性（含 11.25 M 突发档）——需跳线 PC6↔PA10、PA9↔PC7 后跑 `bench.py`；Windows 侧免驱枚举与 WinUSB 自动绑定（本机无 Windows）。
+- 串口回环：PC6↔PC7、PA9↔PA10 自环下双通道全阶梯（115200→11.25 M）完整性与吞吐通过，数据见「性能边界」；期间修复 serial v1 TX DMA 队列竞态（2 M+ 停摆，见 `bridge_pump.c` 模块说明）。
+- 待验证（遗留）：Windows 侧免驱枚举与 WinUSB 自动绑定（本机无 Windows）。
