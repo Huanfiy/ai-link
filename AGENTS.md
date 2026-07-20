@@ -8,10 +8,11 @@ ailink 是基于 RT-Thread 的 STM32F446 固件工程。
 
 | 项 | 内容 |
 | --- | --- |
-| MCU | STM32F446RET6 核心板（LQFP64，Cortex-M4F，硬件 FPU，HSE 8MHz + LSE 32.768kHz）；Kconfig 选择 `SOC_STM32F446RETX` |
+| MCU | STM32F446RET6 核心板（LQFP64，Cortex-M4F，硬件 FPU，HSE 16MHz + LSE 32.768kHz；注意实板晶振为 16MHz，与 `docs/refs/sche` 原理图标注的 8MHz 不符，时钟树由 `HSE_VALUE` 推导） |
 | RTOS | RT-Thread v5.2.0（源码在仓库外 `$RTT_ROOT`，默认 `~/SDK/rt-thread`） |
-| 控制台 | UART1（RT-Thread 设备名 `uart1`） |
-| 构建系统 | SCons + `run.sh` 封装 |
+| 控制台 | UART2，PA2/PA3 115200（RT-Thread 设备名 `uart2`；uart1/uart6 归 USB 桥占用） |
+| 固件架构 | 二级启动：boot（裸机，扇区 0–3）+ app（RT-Thread，0x08010000）；USB 复合设备（双 CDC + CMSIS-DAP + GPIO）+ SPI Flash 文件系统 + ROM DFU 升级，设计见 `docs/design/` |
+| 构建系统 | SCons + `run.sh` 封装；bootloader 为独立 Makefile 工程 |
 | 开发环境 | Linux |
 
 ## 环境与依赖
@@ -37,28 +38,33 @@ ailink 是基于 RT-Thread 的 STM32F446 固件工程。
 ## 构建与烧录
 
 ```bash
-./run.sh build [debug|release]          # 构建固件
-./run.sh rebuild [debug|release]        # 清理后完整构建
-./run.sh rebuild-flash [debug|release]  # 清理、构建并烧录
-./run.sh clean                          # 清理 build/ 与 .sconsign.dblite
-./run.sh flash                          # OpenOCD 烧录到 0x08000000
+./run.sh build [debug|release]          # 构建 app 固件
+./run.sh rebuild [debug|release]        # 清理后完整构建 app
+./run.sh rebuild-flash [debug|release]  # 清理、构建并烧录 app
+./run.sh clean                          # 清理 build/、.sconsign.dblite 与 bootloader/build/
+./run.sh flash                          # OpenOCD 烧录 app 到 0x08010000
+./run.sh build-boot                     # 构建 bootloader（bootloader/build/ailink-boot.bin）
+./run.sh flash-boot                     # OpenOCD 烧录 bootloader 到 0x08000000
+./run.sh flash-all                      # 一次会话烧录 boot + app
 ./run.sh help                           # 帮助；--verbose 输出详细日志
 ```
 
 - 默认 Release（`-Os -DNDEBUG`），Debug 为 `-O0 -g`；优化选项以 `rtconfig.py` 为准。
-- 产物：`build/ailink.elf` / `.bin` / `.map`；链接后由 `tools/build/report_firmware_info.py` 输出内存占用报告。
+- 产物：`build/ailink.elf` / `.bin` / `.map`；链接后由 `tools/build/fwinfo.py` 回填 `.fw_info` 元数据（bin 与 ELF 同步），再由 `tools/build/report_firmware_info.py` 输出内存占用报告。
+- app 链接基址 0x08010000（扇区 0–3 归 bootloader），首次烧录或 bootloader 变更后用 `./run.sh flash-all` 同刷两段。
 - 烧录默认走外接 ST-Link（核心板 SWD 排针，无板载探针）；`compile_commands.json` 由 bear 生成后自动移入 `.vscode/`。
 - 配置变更用 `scons --menuconfig`（更新 `.config` 与 `rtconfig.h`，两者入库，勿手改 `rtconfig.h`）；新增软件包后执行 `pkgs --update`。
 
 ## 目录结构
 
 ```text
-applications/   应用层：业务逻辑（主要开发区）
-board/          板级层：board.c、CubeMX 配置、链接脚本、board/Kconfig
+applications/   应用层：业务逻辑（usb_bridge/ USB 复合设备、ota/ 升级元数据与触发、fs_init.c）
+board/          板级层：board.c、CubeMX 配置、链接脚本、board/Kconfig、ports/（USB/SPI Flash/DAP 板级件）
+bootloader/     裸机二级引导（独立 Makefile 工程，扇区 0–3，OTA 永不改写）
 libraries/      HAL_Drivers：RT-Thread 设备框架对接 STM32 HAL 的适配驱动（drv_*）
 packages/       CMSIS-Core 与 STM32F4 CMSIS/HAL 驱动包（pkgs 拉取，不入库，只读）
 docs/           项目文档（design / notes / refs）
-tools/          构建辅助脚本（tools/build/）
+tools/          构建辅助脚本（tools/build/）与主机侧工具（tools/host/：OTA、GPIO、bench、udev 规则）
 .agents/        入库共享的 AI 协作配置（skills/rttenv）
 run.sh          构建与烧录主入口
 ```
