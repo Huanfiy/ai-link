@@ -1,0 +1,9 @@
+from building import *
+
+cwd = GetCurrentDir()
+src = ['fw_info.c']
+CPPPATH = [cwd]
+
+group = DefineGroup('ota', src, depend = [''], CPPPATH = CPPPATH)
+
+Return('group')

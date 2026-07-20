@@ -6,7 +6,9 @@
 /* Program Entry, set to mark it as "used" and avoid gc */
 MEMORY
 {
-    ROM (rx) : ORIGIN = 0x08000000, LENGTH = 512k /* 512KB flash */
+    /* app region only: sectors 0-3 (64KB @ 0x08000000) belong to the
+     * bootloader (bootloader/link.lds), see docs/design/ota.md */
+    ROM (rx) : ORIGIN = 0x08010000, LENGTH = 448k
     RAM (rw) : ORIGIN = 0x20000000, LENGTH = 128k /* 128K sram */
 }
 ENTRY(Reset_Handler)
@@ -19,6 +21,13 @@ SECTIONS
         . = ALIGN(4);
         _stext = .;
         KEEP(*(.isr_vector))            /* Startup code */
+
+        /* firmware metadata pinned at image base + 0x200, right after the
+         * 0x188 B vector table; patched post-build by tools/build/fwinfo.py
+         * (see docs/design/ota.md). ld errors out if the vector table ever
+         * grows past 0x200. */
+        . = 0x200;
+        KEEP(*(.fw_info))
 
         . = ALIGN(4);
         *(.text)                        /* remaining code */

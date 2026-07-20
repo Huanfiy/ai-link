@@ -20,7 +20,12 @@ readonly PROJECT_NAME="${AILINK_PROJECT_NAME:-ailink}"
 # env, e.g. OPENOCD_INTERFACE=jlink or OPENOCD_INTERFACE=cmsis-dap.
 readonly OPENOCD_INTERFACE="${OPENOCD_INTERFACE:-stlink}"
 readonly OPENOCD_TARGET="${OPENOCD_TARGET:-stm32f4x}"
-readonly FLASH_ADDR="0x08000000"
+
+# Two-stage flash layout (docs/design/ota.md): boot @ sectors 0-3, app follows.
+readonly BOOT_DIR="./bootloader"
+readonly BOOT_BIN="$BOOT_DIR/build/ailink-boot.bin"
+readonly BOOT_ADDR="0x08000000"
+readonly FLASH_ADDR="0x08010000"
 
 # Colors & Formatting
 readonly R='\033[0;31m'   # Red
@@ -159,6 +164,7 @@ cmd_build() {
 cmd_clean() {
     log_info "Cleaning build directory..."
     rm -rf "$BUILD_DIR" .sconsign.dblite || die "Failed to remove build directory: $BUILD_DIR"
+    rm -rf "$BOOT_DIR/build"
 
     log_success "Clean complete."
 }
@@ -183,16 +189,59 @@ cmd_flash() {
     log_success "Flash complete."
 }
 
+cmd_build_boot() {
+    check_toolchain
+    log_info "Building bootloader..."
+    local make_args=(-C "$BOOT_DIR" RTT_EXEC_PATH="$RTT_EXEC_PATH")
+    [[ "$VERBOSE" -eq 0 ]] && make_args+=(-s)
+    make "${make_args[@]}" || die "Bootloader build failed."
+    log_success "Bootloader build complete: $BOOT_BIN"
+}
+
+cmd_flash_boot() {
+    [[ -f "$BOOT_BIN" ]] || die "Bootloader not found: $BOOT_BIN. Run build-boot first."
+    command -v openocd > /dev/null || die "openocd not found in PATH."
+
+    log_info "Flashing $BOOT_BIN to $BOOT_ADDR (${OPENOCD_INTERFACE}/${OPENOCD_TARGET})..."
+    openocd -f "interface/${OPENOCD_INTERFACE}.cfg" \
+            -f "target/${OPENOCD_TARGET}.cfg" \
+            -c "program $BOOT_BIN $BOOT_ADDR verify reset exit" \
+        || die "Bootloader flashing failed (OpenOCD error)."
+
+    log_success "Bootloader flash complete."
+}
+
+# Flash boot + app in one OpenOCD session, single reset at the end.
+cmd_flash_all() {
+    local bin_path
+    bin_path=$(get_app_bin)
+    [[ -f "$bin_path" ]] || die "Firmware not found: $bin_path. Build first."
+    [[ -f "$BOOT_BIN" ]] || die "Bootloader not found: $BOOT_BIN. Run build-boot first."
+    command -v openocd > /dev/null || die "openocd not found in PATH."
+
+    log_info "Flashing boot ($BOOT_ADDR) + app ($FLASH_ADDR)..."
+    openocd -f "interface/${OPENOCD_INTERFACE}.cfg" \
+            -f "target/${OPENOCD_TARGET}.cfg" \
+            -c "program $BOOT_BIN $BOOT_ADDR verify" \
+            -c "program $bin_path $FLASH_ADDR verify reset exit" \
+        || die "Flashing failed (OpenOCD error)."
+
+    log_success "Flash complete (boot + app)."
+}
+
 show_help() {
     cat <<EOF
 Usage: $0 <command> [options]
 
 Commands:
-  build [mode]            Build firmware (${BUILD_DIR#./}/${PROJECT_NAME}.bin)
-  rebuild [mode]          Clean and build firmware
-  rebuild-flash [mode]    Clean, build, and flash firmware
-  clean                   Clean build artifacts
-  flash                   Flash firmware to $FLASH_ADDR via OpenOCD
+  build [mode]            Build app firmware (${BUILD_DIR#./}/${PROJECT_NAME}.bin)
+  rebuild [mode]          Clean and build app firmware
+  rebuild-flash [mode]    Clean, build, and flash app firmware
+  clean                   Clean build artifacts (app + bootloader)
+  flash                   Flash app firmware to $FLASH_ADDR via OpenOCD
+  build-boot              Build bootloader (${BOOT_BIN#./})
+  flash-boot              Flash bootloader to $BOOT_ADDR via OpenOCD
+  flash-all               Flash bootloader + app in one OpenOCD session
   help                    Show this help
 
 Options:
@@ -255,7 +304,7 @@ main() {
         build|rebuild|rebuild-flash)
             validate_mode_args "$cmd" "$@"
             ;;
-        clean|flash|help|--help|-h)
+        clean|flash|build-boot|flash-boot|flash-all|help|--help|-h)
             validate_no_args "$cmd" "$@"
             ;;
         *)
@@ -269,6 +318,9 @@ main() {
         rebuild-flash)      cmd_clean; cmd_build "$@"; cmd_flash ;;
         clean)              cmd_clean ;;
         flash)              cmd_flash ;;
+        build-boot)         cmd_build_boot ;;
+        flash-boot)         cmd_flash_boot ;;
+        flash-all)          cmd_flash_all ;;
         help|--help|-h)     show_help ;;
         *)                  die "Internal dispatch error: $cmd" ;;
     esac
