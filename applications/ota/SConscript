@@ -4,6 +4,11 @@ cwd = GetCurrentDir()
 src = ['fw_info.c']
 CPPPATH = [cwd]
 
+# EP0 trigger requests ride on the USB bridge; fw_info.c stays unconditional
+# so the image always carries its metadata header.
+if GetDepend('BSP_USING_USBD_FS'):
+    src += ['ota_ep0.c']
+
 group = DefineGroup('ota', src, depend = [''], CPPPATH = CPPPATH)
 
 Return('group')
