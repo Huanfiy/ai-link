@@ -534,7 +534,6 @@ static rt_err_t spi_configure(struct rt_spi_device *device,
 
     struct stm32_spi *spi_drv =  rt_container_of(device->bus, struct stm32_spi, spi_bus);
     spi_drv->cfg = configuration;
-    rt_kprintf("@spi_configure\n");
 
     return stm32_spi_init(spi_drv, configuration);
 }
