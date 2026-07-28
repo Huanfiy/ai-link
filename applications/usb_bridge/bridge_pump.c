@@ -9,6 +9,17 @@
  * follows so hosts reading with multi-packet URBs (Windows usbser) see the
  * transfer complete instead of waiting for more data.
  *
+ * The IN side forwards only while the host is actually draining the pipe,
+ * giving FT232-style "port closed = data dropped" semantics without relying
+ * on DTR (not every host app asserts it). Open detection: while idle a ZLP
+ * sits armed on the IN endpoint; host serial drivers (cdc_acm/usbser) submit
+ * IN URBs only while the port is open, so the ZLP completing proves an open
+ * port (apps never see the empty read). Close detection: a transfer pending
+ * longer than PUMP_HOST_IDLE_MS means the URB flow stopped; it is retracted
+ * via usbd_ep_close/open (aborts the transfer, flushes the TX FIFO) and UART
+ * RX is discarded until the next probe completes, so reopening the port
+ * never replays stale bytes.
+ *
  * USB -> UART (OUT): 8 slots of 64B per channel form a ring. The OUT-complete
  * ISR immediately re-arms the next free slot (no thread round-trip); the pump
  * thread coalesces filled slots into a 512B staging buffer, frees them right
@@ -35,6 +46,7 @@
 #define PUMP_IN_BUF_SIZE   512U /* one bulk transfer, 8 packets */
 #define PUMP_OUT_SLOTS     8U   /* 64B OUT slots */
 #define PUMP_TX_STAGE_SIZE (PUMP_OUT_SLOTS * USB_BRIDGE_BULK_MPS)
+#define PUMP_HOST_IDLE_MS  500 /* pending IN with no completion -> port closed */
 
 #define PUMP_EV_USB_OUT   (1U << 0) /* one or more OUT slots filled */
 #define PUMP_EV_USB_IN    (1U << 1) /* IN transfer completed */
@@ -58,6 +70,7 @@ struct bridge_pump {
     uint8_t out_ep;
     uint32_t max_baud;  /* hardware clamp (BRR divisor >= 1 in OVER8) */
     uint16_t rx_bufsz;  /* serial ring size, fixed at open time */
+    const struct usb_endpoint_descriptor *in_desc; /* for retract reopen */
 
     rt_device_t uart;
     struct rt_event ev;
@@ -81,6 +94,11 @@ struct bridge_pump {
     uint8_t in_buf[PUMP_IN_BUF_SIZE] __attribute__((aligned(4)));
     volatile uint8_t in_busy;
 
+    /* host-read presence detection (see header comment) */
+    volatile uint8_t host_reading; /* host is draining the IN pipe (port open) */
+    volatile uint8_t probe_armed;  /* read-probe ZLP pending on the IN ep */
+    rt_tick_t in_start;            /* tick when the in-flight IN was armed */
+
     volatile uint8_t configured;
     uint32_t applied_seq;
 
@@ -96,6 +114,27 @@ struct bridge_pump {
     uint32_t in_last_total;  /* size of last IN transfer */
     uint32_t tx_nodes;       /* TX DMA nodes submitted */
     uint32_t tx_dones;       /* TX DMA completions observed */
+    uint32_t host_opens;     /* port-open detections (probe/data completed) */
+    uint32_t host_retracts;  /* port-close detections (IN retracted) */
+};
+
+/* Minimal bulk IN descriptors so a retract can usbd_ep_open again; must
+ * match the config descriptor in bridge_desc.c. */
+static const struct usb_endpoint_descriptor pump_a_in_desc = {
+    .bLength = USB_SIZEOF_ENDPOINT_DESC,
+    .bDescriptorType = USB_DESCRIPTOR_TYPE_ENDPOINT,
+    .bEndpointAddress = USB_BRIDGE_A_IN_EP,
+    .bmAttributes = USB_ENDPOINT_TYPE_BULK,
+    .wMaxPacketSize = USB_BRIDGE_BULK_MPS,
+    .bInterval = 0,
+};
+static const struct usb_endpoint_descriptor pump_b_in_desc = {
+    .bLength = USB_SIZEOF_ENDPOINT_DESC,
+    .bDescriptorType = USB_DESCRIPTOR_TYPE_ENDPOINT,
+    .bEndpointAddress = USB_BRIDGE_B_IN_EP,
+    .bmAttributes = USB_ENDPOINT_TYPE_BULK,
+    .wMaxPacketSize = USB_BRIDGE_BULK_MPS,
+    .bInterval = 0,
 };
 
 static struct bridge_pump pump_a = {
@@ -105,6 +144,7 @@ static struct bridge_pump pump_a = {
     .out_ep = USB_BRIDGE_A_OUT_EP,
     .max_baud = 11250000UL, /* USART6 on APB2 90MHz, OVER8 floor */
     .rx_bufsz = 8192,
+    .in_desc = &pump_a_in_desc,
 };
 
 static struct bridge_pump pump_b = {
@@ -114,6 +154,7 @@ static struct bridge_pump pump_b = {
     .out_ep = USB_BRIDGE_B_OUT_EP,
     .max_baud = 11250000UL, /* USART1 on APB2 90MHz, OVER8 floor */
     .rx_bufsz = 8192,
+    .in_desc = &pump_b_in_desc,
 };
 
 static struct bridge_pump *const pumps[] = { &pump_a, &pump_b };
@@ -218,7 +259,15 @@ static void pump_usb_in_complete(uint8_t busid, uint8_t ep, uint32_t nbytes)
         usbd_ep_start_write(USB_BRIDGE_BUSID, p->in_ep, RT_NULL, 0);
         return;
     }
+
+    /* any completion (data, terminator ZLP or read probe) proves the host
+     * is draining the pipe: IN URBs only exist while the port is open */
+    p->probe_armed = 0;
     p->in_busy = 0;
+    if (!p->host_reading) {
+        p->host_reading = 1;
+        p->host_opens++;
+    }
     rt_event_send(&p->ev, PUMP_EV_USB_IN);
 }
 
@@ -351,7 +400,7 @@ static void pump_drain_out_slots(struct bridge_pump *p)
 
 static void pump_send_uart_data(struct bridge_pump *p)
 {
-    if (p->in_busy || !p->configured) {
+    if (p->in_busy || !p->configured || !p->host_reading) {
         return;
     }
 
@@ -364,8 +413,73 @@ static void pump_send_uart_data(struct bridge_pump *p)
     p->uart_to_usb_bytes += got;
     p->in_xfers++;
     p->in_last_total = got;
+    p->in_start = rt_tick_get();
     p->in_busy = 1;
     bridge_ep_start_write(p->in_ep, p->in_buf, got);
+}
+
+/* Nobody is listening: keep the serial ring empty so a later open never
+ * replays history (what a hardware bridge does when its tiny buffer
+ * overflows and the driver purges on open). in_buf doubles as the discard
+ * scratch, safe because no IN transfer is in flight while idle. */
+static void pump_discard_uart_rx(struct bridge_pump *p)
+{
+    if (p->in_busy) {
+        return;
+    }
+    while (rt_device_read(p->uart, 0, p->in_buf, PUMP_IN_BUF_SIZE) > 0) {
+    }
+}
+
+/* Idle side of open detection: drop UART RX and keep one ZLP probe armed on
+ * the IN endpoint; its completion (pump_usb_in_complete) flips host_reading.
+ * The recheck and the arm share one interrupt-off section: if the previous
+ * probe completes between them the ISR flips host_reading and arming again
+ * would double-arm the endpoint under an imminent data write. */
+static void pump_probe_host(struct bridge_pump *p)
+{
+    rt_base_t level;
+
+    if (p->host_reading) {
+        return;
+    }
+    pump_discard_uart_rx(p);
+
+    level = rt_hw_interrupt_disable();
+    if (p->configured && !p->host_reading && !p->probe_armed && !p->in_busy) {
+        p->probe_armed = 1;
+        usbd_ep_start_write(USB_BRIDGE_BUSID, p->in_ep, RT_NULL, 0);
+    }
+    rt_hw_interrupt_enable(level);
+}
+
+/* Close detection: an IN transfer nobody reads within PUMP_HOST_IDLE_MS
+ * means the URB flow stopped (port closed, or host throttled long enough
+ * that a hardware bridge would be dropping too). Retract it so the stale
+ * payload never reaches the next open: ep close aborts the transfer, ep
+ * open re-registers it and flushes the TX FIFO. Interrupt-off for the same
+ * dwc2 shared-register rule as bridge_ep_start_*; the in_busy recheck
+ * closes the race with a completion firing just before the close. */
+static void pump_check_host_gone(struct bridge_pump *p)
+{
+    rt_base_t level;
+
+    if (!p->host_reading || !p->in_busy || !p->configured) {
+        return;
+    }
+    if (rt_tick_get() - p->in_start < rt_tick_from_millisecond(PUMP_HOST_IDLE_MS)) {
+        return;
+    }
+
+    level = rt_hw_interrupt_disable();
+    if (p->in_busy) {
+        usbd_ep_close(USB_BRIDGE_BUSID, p->in_ep);
+        usbd_ep_open(USB_BRIDGE_BUSID, p->in_desc);
+        p->in_busy = 0;
+        p->host_reading = 0;
+        p->host_retracts++;
+    }
+    rt_hw_interrupt_enable(level);
 }
 
 static void pump_restart(struct bridge_pump *p)
@@ -380,6 +494,10 @@ static void pump_restart(struct bridge_pump *p)
     /* tx_inflight is left alone: an in-flight DMA node completes on its own
      * and clears it via the TX-done callback */
     p->in_busy = 0;
+    /* bus reset killed any armed transfer with it; pump_probe_host re-arms
+     * a fresh read probe once configured */
+    p->host_reading = 0;
+    p->probe_armed = 0;
     if (p->configured) {
         pump_try_arm_out(p);
     }
@@ -404,6 +522,8 @@ static void pump_entry(void *param)
 
         pump_apply_line_cfg(p);
 
+        pump_check_host_gone(p);
+        pump_probe_host(p);
         pump_drain_out_slots(p);
         pump_send_uart_data(p);
     }
@@ -558,9 +678,10 @@ void bridge_pump_stat(void)
     for (uint8_t i = 0; i < PUMP_COUNT; i++) {
         struct bridge_pump *p = pumps[i];
 
-        rt_kprintf("ch%c pump: u2h=%u h2u=%u nak=%u clamp=%u cfg=%u\n",
+        rt_kprintf("ch%c pump: u2h=%u h2u=%u nak=%u clamp=%u cfg=%u rd=%u opens=%u retracts=%u\n",
                    'A' + p->ch, p->uart_to_usb_bytes, p->usb_to_uart_bytes,
-                   p->nak_backpressure, p->clamped_baud, p->configured);
+                   p->nak_backpressure, p->clamped_baud, p->configured,
+                   p->host_reading, p->host_opens, p->host_retracts);
         rt_kprintf("      in: xfers=%u done=%u zlp=%u busy=%u last=%u | out: done=%u stall=%u\n",
                    p->in_xfers, p->in_completes, p->in_zlps, p->in_busy,
                    p->in_last_total, p->out_completes, p->out_stalled);
