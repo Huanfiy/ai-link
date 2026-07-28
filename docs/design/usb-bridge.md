@@ -43,7 +43,7 @@ F446 OTG_FS 有 EP0 + 5 对端点，全部用满：
 
 - `bridge_desc.c`：设备/配置/BOS/MSOSv2/字符串描述符，五接口枚举与初始化入口（`INIT_APP_EXPORT`）。
 - `cdc_proto.c`：CDC 线路参数回调（记录 + seq 递增）、EP0 vendor 分发（GPIO 转发 + OTA 扩展槽 `usb_bridge_register_vendor_ext()`）、msh 诊断命令。
-- `bridge_pump.c`：每通道 1 线程的双向泵。UART→USB 侧从 serial DMA 环形收（每通道 8 KB），单次最多 512 B `usbd_ep_start_write`；USB→UART 侧 8 槽 64 B 环，OUT 完成 ISR 立即重挂空闲槽，满槽时靠 USB NAK 反压；就绪槽由泵线程合批进 512 B 暂存区后以**单节点**提交 UART TX DMA（serial v1 的 TX data queue 在多节点并发下存在 push 与 DMADONE 竞态，队列深度 >1 时完成事件丢失会永久停摆——实测 2 M+ 触发，单节点化后消除），波特率重配延迟到节点间隙执行。溢出计入 `usbbr_stat`。
+- `bridge_pump.c`：每通道 1 线程的双向泵。UART→USB 侧从 serial DMA 环形收（每通道 8 KB），单次最多 512 B `usbd_ep_start_write`；USB→UART 侧 8 槽 64 B 环，OUT 完成 ISR 立即重挂空闲槽，满槽时靠 USB NAK 反压；就绪槽由泵线程合批进 512 B 暂存区后以**单节点**提交 UART TX DMA（serial v1 的 TX data queue 在多节点并发下存在 push 与 DMADONE 竞态，队列深度 >1 时完成事件丢失会永久停摆——实测 2 M+ 触发，单节点化后消除），波特率重配延迟到节点间隙执行。溢出计入 `usbbr_stat`。UART→USB 方向仅在主机端口打开期间转发，未打开时数据丢弃不回放（probe / retract 门控与设计边界见 [cdc-port-gating.md](cdc-port-gating.md)）。
 - `bridge_gpio.c`：8 引脚映射表 `static const`，经 `rt_pin_*` 操作，协议处理在 USB ISR 内（寄存器级操作，微秒量级）。
 - `bridge_dap.c`：EP3 命令-响应泵线程，调用 CMSIS-DAP 参考实现 `DAP_ExecuteCommand`，并提供 `DAP_Info` 标识串回调。
 - `dap/`：ARM CMSIS-DAP 参考源码（`DAP.c`/`SW_DP.c`/`DAP.h`，Apache-2.0）逐字副本，只读；改动只经 `board/ports/DAP_config.h`（SWD 位操作，`DAP_JTAG=0`、`SWO=0`）。
