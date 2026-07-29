@@ -1,0 +1,264 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1180" viewBox="0 0 1600 1180" role="img" aria-labelledby="title desc">
+  <title id="title">ailink 串口、CMSIS-DAP 与 GPIO 接线说明</title>
+  <desc id="desc">展示 ailink 串口 A、串口 B、CMSIS-DAP SWD 和八路 GPIO 的引脚映射、信号方向及共地要求。</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset="1" stop-color="#eef2ff"/>
+    </linearGradient>
+    <linearGradient id="board" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#172554"/>
+      <stop offset="1" stop-color="#312e81"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#0f172a" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#16a34a"/>
+    </marker>
+    <marker id="arrow-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7c3aed"/>
+    </marker>
+    <style>
+      text {
+        font-family: "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+      }
+      .title { font-size: 38px; font-weight: 800; letter-spacing: 1px; }
+      .subtitle { font-size: 19px; fill: #475569; }
+      .card-title { font-size: 26px; font-weight: 800; }
+      .card-subtitle { font-size: 16px; fill: #64748b; }
+      .pin { font-size: 19px; font-weight: 700; }
+      .signal { font-size: 16px; fill: #475569; }
+      .small { font-size: 15px; fill: #475569; }
+      .tiny { font-size: 13px; fill: #64748b; }
+      .mono {
+        font-family: "JetBrains Mono", "Noto Sans Mono CJK SC", "DejaVu Sans Mono", monospace;
+      }
+      .card { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; }
+      .pinbox-left { fill: #eff6ff; stroke: #93c5fd; stroke-width: 1.5; }
+      .pinbox-right { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; }
+      .wire-blue { fill: none; stroke: #2563eb; stroke-width: 4; stroke-linecap: round; }
+      .wire-violet { fill: none; stroke: #7c3aed; stroke-width: 4; stroke-linecap: round; }
+      .wire-ground { fill: none; stroke: #475569; stroke-width: 4; stroke-linecap: round; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1180" fill="url(#bg)"/>
+
+  <text x="48" y="62" class="title">ailink 接线速查</text>
+  <text x="48" y="96" class="subtitle">双 CDC 串口 · CMSIS-DAP v2（SWD）· 8 路主机控制 GPIO</text>
+
+  <g filter="url(#shadow)">
+    <rect x="48" y="124" width="1504" height="82" rx="16" fill="#fff7ed" stroke="#fb923c" stroke-width="2"/>
+    <circle cx="88" cy="165" r="21" fill="#f97316"/>
+    <text x="88" y="173" text-anchor="middle" font-size="25" font-weight="800" fill="#ffffff">!</text>
+    <text x="124" y="157" font-size="18" font-weight="700">接线前确认</text>
+    <text x="124" y="184" font-size="17" fill="#7c2d12">所有信号按 3.3 V 逻辑电平使用；ailink 与目标设备必须共地；目标设备建议独立供电，禁止将 5 V 信号接入下列 GPIO。</text>
+  </g>
+
+  <!-- UART A -->
+  <g filter="url(#shadow)">
+    <rect x="48" y="238" width="486" height="420" rx="20" class="card"/>
+    <rect x="48" y="238" width="486" height="78" rx="20" fill="#dbeafe"/>
+    <path d="M48 296 V316 H534 V296" fill="#dbeafe"/>
+    <circle cx="88" cy="277" r="20" fill="#2563eb"/>
+    <text x="88" y="284" text-anchor="middle" font-size="19" font-weight="800" fill="#ffffff">A</text>
+    <text x="122" y="275" class="card-title">串口 A</text>
+    <text x="122" y="299" class="card-subtitle">USB CDC if00 · USART6 · 最高 11.25 Mbaud</text>
+
+    <text x="78" y="350" font-size="16" font-weight="700" fill="#1d4ed8">ailink 板端</text>
+    <text x="358" y="350" font-size="16" font-weight="700">外部串口设备</text>
+
+    <rect x="72" y="374" width="172" height="58" rx="10" class="pinbox-left"/>
+    <text x="88" y="398" class="pin mono">PC6</text>
+    <text x="88" y="419" class="signal">TX · 输出</text>
+    <rect x="342" y="374" width="166" height="58" rx="10" class="pinbox-right"/>
+    <text x="358" y="409" class="pin mono">RX</text>
+    <path d="M244 403 H342" class="wire-blue" marker-end="url(#arrow-blue)"/>
+
+    <rect x="72" y="454" width="172" height="58" rx="10" class="pinbox-left"/>
+    <text x="88" y="478" class="pin mono">PC7</text>
+    <text x="88" y="499" class="signal">RX · 输入</text>
+    <rect x="342" y="454" width="166" height="58" rx="10" class="pinbox-right"/>
+    <text x="358" y="489" class="pin mono">TX</text>
+    <path d="M342 483 H244" class="wire-blue" marker-end="url(#arrow-blue)"/>
+
+    <rect x="72" y="534" width="172" height="58" rx="10" class="pinbox-left"/>
+    <text x="88" y="570" class="pin mono">GND</text>
+    <rect x="342" y="534" width="166" height="58" rx="10" class="pinbox-right"/>
+    <text x="358" y="570" class="pin mono">GND</text>
+    <path d="M244 563 H342" class="wire-ground"/>
+
+    <text x="72" y="629" class="small">要点：TX 与 RX 交叉连接，GND 直连。</text>
+  </g>
+
+  <!-- UART B -->
+  <g filter="url(#shadow)">
+    <rect x="557" y="238" width="486" height="420" rx="20" class="card"/>
+    <rect x="557" y="238" width="486" height="78" rx="20" fill="#dcfce7"/>
+    <path d="M557 296 V316 H1043 V296" fill="#dcfce7"/>
+    <circle cx="597" cy="277" r="20" fill="#16a34a"/>
+    <text x="597" y="284" text-anchor="middle" font-size="19" font-weight="800" fill="#ffffff">B</text>
+    <text x="631" y="275" class="card-title">串口 B</text>
+    <text x="631" y="299" class="card-subtitle">USB CDC if02 · USART1 · 最高 11.25 Mbaud</text>
+
+    <text x="587" y="350" font-size="16" font-weight="700" fill="#15803d">ailink 板端</text>
+    <text x="867" y="350" font-size="16" font-weight="700">外部串口设备</text>
+
+    <rect x="581" y="374" width="172" height="58" rx="10" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+    <text x="597" y="398" class="pin mono">PA9</text>
+    <text x="597" y="419" class="signal">TX · 输出</text>
+    <rect x="851" y="374" width="166" height="58" rx="10" class="pinbox-right"/>
+    <text x="867" y="409" class="pin mono">RX</text>
+    <path d="M753 403 H851" fill="none" stroke="#16a34a" stroke-width="4" stroke-linecap="round" marker-end="url(#arrow-green)"/>
+
+    <rect x="581" y="454" width="172" height="58" rx="10" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+    <text x="597" y="478" class="pin mono">PA10</text>
+    <text x="597" y="499" class="signal">RX · 输入</text>
+    <rect x="851" y="454" width="166" height="58" rx="10" class="pinbox-right"/>
+    <text x="867" y="489" class="pin mono">TX</text>
+    <path d="M851 483 H753" fill="none" stroke="#16a34a" stroke-width="4" stroke-linecap="round" marker-end="url(#arrow-green)"/>
+
+    <rect x="581" y="534" width="172" height="58" rx="10" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+    <text x="597" y="570" class="pin mono">GND</text>
+    <rect x="851" y="534" width="166" height="58" rx="10" class="pinbox-right"/>
+    <text x="867" y="570" class="pin mono">GND</text>
+    <path d="M753 563 H851" class="wire-ground"/>
+
+    <text x="581" y="629" class="small">要点：TX 与 RX 交叉连接，GND 直连。</text>
+  </g>
+
+  <!-- CMSIS-DAP -->
+  <g filter="url(#shadow)">
+    <rect x="1066" y="238" width="486" height="420" rx="20" class="card"/>
+    <rect x="1066" y="238" width="486" height="78" rx="20" fill="#ede9fe"/>
+    <path d="M1066 296 V316 H1552 V296" fill="#ede9fe"/>
+    <circle cx="1106" cy="277" r="20" fill="#7c3aed"/>
+    <path d="M1097 278 l6 6 12 -14" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="1140" y="275" class="card-title">CMSIS-DAP v2</text>
+    <text x="1140" y="299" class="card-subtitle">仅支持 SWD · 不支持 JTAG / SWO</text>
+
+    <text x="1096" y="342" font-size="16" font-weight="700" fill="#6d28d9">ailink 板端</text>
+    <text x="1380" y="342" font-size="16" font-weight="700">目标 MCU</text>
+
+    <rect x="1090" y="358" width="176" height="54" rx="10" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5"/>
+    <text x="1106" y="380" class="pin mono">PA4</text>
+    <text x="1106" y="400" class="signal">SWCLK · 输出</text>
+    <rect x="1360" y="358" width="166" height="54" rx="10" class="pinbox-right"/>
+    <text x="1376" y="391" class="pin mono">SWCLK</text>
+    <path d="M1266 385 H1360" class="wire-violet" marker-end="url(#arrow-violet)"/>
+
+    <rect x="1090" y="428" width="176" height="54" rx="10" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5"/>
+    <text x="1106" y="450" class="pin mono">PA5</text>
+    <text x="1106" y="470" class="signal">SWDIO · 双向</text>
+    <rect x="1360" y="428" width="166" height="54" rx="10" class="pinbox-right"/>
+    <text x="1376" y="461" class="pin mono">SWDIO</text>
+    <path d="M1266 455 H1360" class="wire-violet" marker-start="url(#arrow-violet)" marker-end="url(#arrow-violet)"/>
+
+    <rect x="1090" y="498" width="176" height="54" rx="10" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5"/>
+    <text x="1106" y="520" class="pin mono">PA6</text>
+    <text x="1106" y="540" class="signal">nRESET · 开漏</text>
+    <rect x="1360" y="498" width="166" height="54" rx="10" class="pinbox-right"/>
+    <text x="1376" y="531" class="pin mono">nRESET</text>
+    <path d="M1266 525 H1360" class="wire-violet" marker-end="url(#arrow-violet)"/>
+
+    <rect x="1090" y="568" width="176" height="54" rx="10" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5"/>
+    <text x="1106" y="601" class="pin mono">GND</text>
+    <rect x="1360" y="568" width="166" height="54" rx="10" class="pinbox-right"/>
+    <text x="1376" y="601" class="pin mono">GND</text>
+    <path d="M1266 595 H1360" class="wire-ground"/>
+
+    <text x="1090" y="644" class="tiny">目标板独立供电；未实现 VTref 电压检测。</text>
+  </g>
+
+  <!-- GPIO bank -->
+  <g filter="url(#shadow)">
+    <rect x="48" y="690" width="1504" height="424" rx="20" class="card"/>
+    <rect x="48" y="690" width="1504" height="82" rx="20" fill="#e0f2fe"/>
+    <path d="M48 752 V772 H1552 V752" fill="#e0f2fe"/>
+    <text x="78" y="732" class="card-title">8 路 GPIO</text>
+    <text x="78" y="758" class="card-subtitle">每路均可配置为浮空输入或推挽输出；3.3 V 逻辑；先设置方向，再写输出电平</text>
+
+    <g transform="translate(72 802)">
+      <rect width="166" height="174" rx="14" fill="#f0f9ff" stroke="#7dd3fc" stroke-width="2"/>
+      <text x="83" y="36" text-anchor="middle" font-size="17" font-weight="700" fill="#0369a1">bit 0</text>
+      <text x="83" y="78" text-anchor="middle" font-size="26" font-weight="800" class="mono">PB0</text>
+      <path d="M28 98 H138" stroke="#bae6fd" stroke-width="2"/>
+      <text x="83" y="126" text-anchor="middle" class="small">浮空输入</text>
+      <text x="83" y="151" text-anchor="middle" class="small">推挽输出</text>
+    </g>
+    <g transform="translate(256 802)">
+      <rect width="166" height="174" rx="14" fill="#f0f9ff" stroke="#7dd3fc" stroke-width="2"/>
+      <text x="83" y="36" text-anchor="middle" font-size="17" font-weight="700" fill="#0369a1">bit 1</text>
+      <text x="83" y="78" text-anchor="middle" font-size="26" font-weight="800" class="mono">PB1</text>
+      <path d="M28 98 H138" stroke="#bae6fd" stroke-width="2"/>
+      <text x="83" y="126" text-anchor="middle" class="small">浮空输入</text>
+      <text x="83" y="151" text-anchor="middle" class="small">推挽输出</text>
+    </g>
+    <g transform="translate(440 802)">
+      <rect width="166" height="174" rx="14" fill="#f0f9ff" stroke="#7dd3fc" stroke-width="2"/>
+      <text x="83" y="36" text-anchor="middle" font-size="17" font-weight="700" fill="#0369a1">bit 2</text>
+      <text x="83" y="78" text-anchor="middle" font-size="26" font-weight="800" class="mono">PB2</text>
+      <path d="M28 98 H138" stroke="#bae6fd" stroke-width="2"/>
+      <text x="83" y="126" text-anchor="middle" class="small">浮空输入</text>
+      <text x="83" y="151" text-anchor="middle" class="small">推挽输出</text>
+    </g>
+    <g transform="translate(624 802)">
+      <rect width="166" height="174" rx="14" fill="#f0f9ff" stroke="#7dd3fc" stroke-width="2"/>
+      <text x="83" y="36" text-anchor="middle" font-size="17" font-weight="700" fill="#0369a1">bit 3</text>
+      <text x="83" y="78" text-anchor="middle" font-size="26" font-weight="800" class="mono">PB8</text>
+      <path d="M28 98 H138" stroke="#bae6fd" stroke-width="2"/>
+      <text x="83" y="126" text-anchor="middle" class="small">浮空输入</text>
+      <text x="83" y="151" text-anchor="middle" class="small">推挽输出</text>
+    </g>
+    <g transform="translate(808 802)">
+      <rect width="166" height="174" rx="14" fill="#f0f9ff" stroke="#7dd3fc" stroke-width="2"/>
+      <text x="83" y="36" text-anchor="middle" font-size="17" font-weight="700" fill="#0369a1">bit 4</text>
+      <text x="83" y="78" text-anchor="middle" font-size="26" font-weight="800" class="mono">PB9</text>
+      <path d="M28 98 H138" stroke="#bae6fd" stroke-width="2"/>
+      <text x="83" y="126" text-anchor="middle" class="small">浮空输入</text>
+      <text x="83" y="151" text-anchor="middle" class="small">推挽输出</text>
+    </g>
+    <g transform="translate(992 802)">
+      <rect width="166" height="174" rx="14" fill="#f0f9ff" stroke="#7dd3fc" stroke-width="2"/>
+      <text x="83" y="36" text-anchor="middle" font-size="17" font-weight="700" fill="#0369a1">bit 5</text>
+      <text x="83" y="78" text-anchor="middle" font-size="26" font-weight="800" class="mono">PB10</text>
+      <path d="M28 98 H138" stroke="#bae6fd" stroke-width="2"/>
+      <text x="83" y="126" text-anchor="middle" class="small">浮空输入</text>
+      <text x="83" y="151" text-anchor="middle" class="small">推挽输出</text>
+    </g>
+    <g transform="translate(1176 802)">
+      <rect width="166" height="174" rx="14" fill="#f0f9ff" stroke="#7dd3fc" stroke-width="2"/>
+      <text x="83" y="36" text-anchor="middle" font-size="17" font-weight="700" fill="#0369a1">bit 6</text>
+      <text x="83" y="78" text-anchor="middle" font-size="26" font-weight="800" class="mono">PA1</text>
+      <path d="M28 98 H138" stroke="#bae6fd" stroke-width="2"/>
+      <text x="83" y="126" text-anchor="middle" class="small">浮空输入</text>
+      <text x="83" y="151" text-anchor="middle" class="small">推挽输出</text>
+    </g>
+    <g transform="translate(1360 802)">
+      <rect width="166" height="174" rx="14" fill="#f0f9ff" stroke="#7dd3fc" stroke-width="2"/>
+      <text x="83" y="36" text-anchor="middle" font-size="17" font-weight="700" fill="#0369a1">bit 7</text>
+      <text x="83" y="78" text-anchor="middle" font-size="26" font-weight="800" class="mono">PA8</text>
+      <path d="M28 98 H138" stroke="#bae6fd" stroke-width="2"/>
+      <text x="83" y="126" text-anchor="middle" class="small">浮空输入</text>
+      <text x="83" y="151" text-anchor="middle" class="small">推挽输出</text>
+    </g>
+
+    <rect x="72" y="1000" width="1454" height="82" rx="12" fill="#0f172a"/>
+    <text x="96" y="1032" font-size="16" font-weight="700" fill="#ffffff">主机控制示例</text>
+    <text x="96" y="1061" font-size="15" fill="#cbd5e1" class="mono">ailink-gpio.py dir 0xFF 0xFF</text>
+    <text x="448" y="1061" font-size="15" fill="#94a3b8">全部设为输出</text>
+    <text x="650" y="1061" font-size="15" fill="#cbd5e1" class="mono">set 0x0F 0x05</text>
+    <text x="850" y="1061" font-size="15" fill="#94a3b8">按掩码写电平</text>
+    <text x="1056" y="1061" font-size="15" fill="#cbd5e1" class="mono">get</text>
+    <text x="1118" y="1061" font-size="15" fill="#94a3b8">读取电平/方向</text>
+    <text x="1336" y="1061" font-size="15" fill="#cbd5e1" class="mono">pulse</text>
+    <text x="1410" y="1061" font-size="15" fill="#94a3b8">输出脉冲</text>
+  </g>
+
+  <text x="800" y="1153" text-anchor="middle" class="tiny">固件控制台 UART2（PA2 / PA3）独立于上述桥接通道，未画入本图。</text>
+</svg>

@@ -26,6 +26,15 @@
 
 最新 DAPLink、双路串口与固件升级性能见 [performance-report.md](performance-report.md)；端点映射、描述符布局与 FIFO 分区见 [docs/design/usb-bridge.md](docs/design/usb-bridge.md)；升级与救砖链路见 [docs/design/ota.md](docs/design/ota.md)。
 
+## 接线说明
+
+![ailink 串口、CMSIS-DAP 与 GPIO 接线说明](docs/images/wiring-guide.svg)
+
+- 串口 A/B 的 TX 与外部设备 RX 交叉连接，RX 与外部设备 TX 交叉连接。
+- ailink 与外部串口设备或目标 MCU 必须共地；所有信号按 3.3 V 逻辑电平使用，目标设备建议独立供电。
+- CMSIS-DAP 仅支持 SWD，接线为 `PA4 → SWCLK`、`PA5 ↔ SWDIO`、`PA6 → nRESET`、`GND ↔ GND`，不支持 JTAG / SWO。
+- GPIO 须先用 `ailink-gpio.py dir` 配置方向，再执行 `set`；`get` 可读取全部引脚电平与方向。
+
 ## 构建与烧录
 
 | 依赖 | 说明 |
