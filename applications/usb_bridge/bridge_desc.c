@@ -22,7 +22,7 @@
 #define USBD_VID       0x1209 /* pid.codes open-source VID */
 #define USBD_PID       0x0010 /* pid.codes test PID, not for general sale */
 #define USBD_BCDDEVICE 0x0100
-#define USBD_MAX_POWER 100    /* mA */
+#define USBD_MAX_POWER 500    /* mA */
 #define USBD_LANGID    0x0409 /* en-US */
 
 /* 9 config + 2 * CDC ACM function (IAD 8 + 9+5+5+4+5 + 7 + 9 + 7+7)
@@ -219,6 +219,7 @@ static struct usbd_interface intf_dap;
 static void bridge_event_handler(uint8_t busid, uint8_t event)
 {
     (void)busid;
+    bridge_product_notify_event(event);
     bridge_pump_notify_event(event);
     bridge_dap_notify_event(event);
 }
@@ -234,6 +235,12 @@ static int usb_bridge_init(void)
     rt_err_t err;
 
     serial_string_from_uid();
+
+    err = bridge_product_start();
+    if (err != RT_EOK)
+    {
+        return err;
+    }
 
     /* pump/DAP threads and UARTs must be live before the host configures us */
     err = bridge_pump_start();

@@ -73,7 +73,11 @@ static int ota_vendor_request_handler(uint8_t busid, struct usb_setup_packet *se
             return -1;
         }
         ota_want_dfu = (setup->wValue == 1);
-        rt_timer_start(&ota_reboot_timer);
+        if (rt_timer_start(&ota_reboot_timer) != RT_EOK)
+        {
+            return -1;
+        }
+        bridge_product_prepare_reboot();
         return 0;
 
     case OTA_REQ_VERSION: {

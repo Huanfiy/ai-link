@@ -16,11 +16,12 @@
 | --- | --- | --- | --- |
 | 串口 A | `/dev/ttyACM*`（by-id `if00`） | USART6，PC6=TX / PC7=RX | 上限 11.25 M；最新吞吐与完整性基线见性能测试报告 |
 | 串口 B | `/dev/ttyACM*`（by-id `if02`） | USART1，PA9=TX / PA10=RX | 同上（两路同为 APB2 90 MHz 时钟域） |
-| GPIO | `ailink-gpio.py` | bit 0–7 = PB0 / PB1 / PB2 / PB8 / PB9 / PB10 / PA1 / PA8 | EP0 vendor request，不占用串口与调试通道 |
+| GPIO | `ailink-gpio.py` | bit 0–7 = PB0 / PB1 / PA0 / PB8 / PB9 / PB10 / PA1 / PA8 | EP0 vendor request，不占用串口与调试通道；PB2 专用于 BOOT1 下拉 |
 | 调试器 | pyOCD / OpenOCD | SWCLK=PA4 / SWDIO=PA5 / nRESET=PA6 | CMSIS-DAP v2；最新 SWD 时钟与内存吞吐基线见性能测试报告 |
 
 - 四路通道可并发使用；固件控制台独立走 UART2（PA2=TX / PA3=RX，115200 8N1），不参与桥接。
 - 序列号取 MCU 96-bit UID，`/dev/serial/by-id/` 路径跨板稳定。
+- 当前固件接入 v0.4 产品板的四路串口灯和 PC9 目标供电控制，策略与验证边界见 [产品供电与指示](docs/design/usb-bridge.md#产品供电与指示v04)。旧核心板需要按新版引脚连接。
 - 固件升级免调试器：`ailink-ota.py flash` 一条命令走 ROM DFU 直刷，期间设备离线；升级中断不变砖，自研 boot 校验失败自动回落 DFU，重跑命令即救回。
 - 已知边界：串口无 RTS/CTS 硬件流控，主机连续写入需限制在飞字节数（见 `bench.py --window`，设备侧 RX 环每通道 8 KB）；双路串口与 DAP 共享 USB FS 总线带宽。
 

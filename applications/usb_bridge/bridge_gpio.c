@@ -6,7 +6,7 @@
  * PE port, so the 8 logical bank bits map onto scattered pins via a table
  * instead of one whole-port register:
  *
- *   bit 0..7 = PB0, PB1, PB2, PB8, PB9, PB10, PA1, PA8
+ *   bit 0..7 = PB0, PB1, PA0, PB8, PB9, PB10, PA1, PA8
  *
  * Runs in USB ISR context: rt_pin_* on STM32 is register-level (microseconds).
  *
@@ -18,21 +18,21 @@
 
 #include "usbd_core.h"
 
+#include "ailink_product.h"
 #include "usb_bridge.h"
 
 #define GPIO_PIN_COUNT 8U
 
 /* logical bank bit -> physical pin (see header comment) */
 static const rt_base_t gpio_pin_map[GPIO_PIN_COUNT] = {
-    GET_PIN(B, 0), GET_PIN(B, 1), GET_PIN(B, 2), GET_PIN(B, 8),
+    GET_PIN(B, 0), GET_PIN(B, 1),  GET_PIN(A, 0), GET_PIN(B, 8),
     GET_PIN(B, 9), GET_PIN(B, 10), GET_PIN(A, 1), GET_PIN(A, 8),
 };
 
 /* bit set = configured as output; inputs come up floating */
 static uint8_t gpio_dir_mask;
 
-int bridge_gpio_request_handler(struct usb_setup_packet *setup,
-                                uint8_t **data, uint32_t *len)
+static int gpio_request_active(struct usb_setup_packet *setup, uint8_t **data, uint32_t *len)
 {
     switch (setup->bRequest) {
     case USB_BRIDGE_GPIO_REQ_CONFIG: {
@@ -88,4 +88,13 @@ int bridge_gpio_request_handler(struct usb_setup_packet *setup,
     default:
         return -1;
     }
+}
+
+int bridge_gpio_request_handler(struct usb_setup_packet *setup, uint8_t **data, uint32_t *len)
+{
+    /* Power removal must not interleave with a multi-pin mode update. */
+    rt_base_t level = rt_hw_interrupt_disable();
+    int result = ailink_target_is_ready() ? gpio_request_active(setup, data, len) : -1;
+    rt_hw_interrupt_enable(level);
+    return result;
 }

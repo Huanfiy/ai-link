@@ -28,7 +28,7 @@ F446 OTG_FS 有 EP0 + 5 对端点，全部用满：
 
 - 两路桥全用 APB2 串口以对齐 11.25 M 上限（OVER8 时 90 MHz / 8）；控制台为此让位迁至 `uart2`（PA2/PA3，APB1，115200）。
 - 11.25 M 为 UART 线速能力（短突发/固定高波特率场景）；双通道与 DAP 共享 USB FS bulk 带宽，持续吞吐见性能测试报告。
-- GPIO 控制组引脚表（`bridge_gpio.c`，LQFP64 无 PE 口，改散点引脚）：bit 0..7 = PB0、PB1、PB2、PB8、PB9、PB10、PA1、PA8。
+- GPIO 控制组引脚表（`bridge_gpio.c`，LQFP64 无 PE 口，改散点引脚）：bit 0..7 = PB0、PB1、PA0、PB8、PB9、PB10、PA1、PA8；PB2/BOOT1 保持固定下拉。
 - DMA 选流：UART1_RX=DMA2_S2/Ch4、UART1_TX=DMA2_S7/Ch4、UART6_RX=DMA2_S1/Ch5、UART6_TX=DMA2_S6/Ch5（`dma_config.h` 链式分配结果）。
 
 ## 协议要点（实现依据）
@@ -58,6 +58,19 @@ F446 OTG_FS 有 EP0 + 5 对端点，全部用满：
 - USB 传输缓冲需 4 字节对齐（dwc2 断言要求）。
 - 泵线程调用 `usbd_ep_start_read/write` 时关中断，避免与 USB ISR 竞争 `DIEPEMPMSK` 读改写导致 IN 传输永久停摆。
 - F446 OTG_FS 无 VBUS 检测脚约束：CherryUSB ST glue 按 `STM32F446xx` 自动置 `b_session_valid_override`，无需板级处理。
+
+## 产品供电与指示（v0.4）
+
+`bridge_product.c` 通过 `board/ports/ailink_product.c` 管理目标供电和灯态。应用层不直接操作 GPIO 寄存器。
+
+- USB 配置描述符申报 500 mA。上电时 PC9 为低，目标 UART/SWD/GPIO 为浮空输入；配置有效且未挂起时，先使能两路限流开关，经过至少 4 ms 再恢复信号驱动。状态轮询周期为 10 ms。
+- USB 复位、断连、挂起、反初始化和已接受的 OTA 重启请求会先释放目标信号及内部上拉，再关闭 PC9。当前 CherryUSB 对 `SET_CONFIGURATION(0)` 不发通知，由轮询在 10 ms 内关闭输出。普通挂起/恢复保留原 GPIO 模式；MCU 复位后重新从输入模式开始。
+- A_TX、A_RX、B_TX、B_RX 四灯分别由 PC3、PC4、PC5、PC8 低有效驱动。成功提交非空 TX 后点亮，DMA 完成后保持 50 ms；RX 仅在收到非零数据后保持 50 ms。四灯独立，长 TX 保持点亮，空包和停电后的迟到回调不会点亮通信灯。
+- RGB 的 PC1 绿色表示 USB 已配置；挂起或未配置时熄灭。PWR 为硬件电源指示。
+
+验证入口为 `bash tools/tests/run-product.sh`：使用实际产品模块，在 100/1000 Hz tick、地址/未定义行为检查器下验证供电时序、独立灯态、tick 回绕及 USB/自身 SWD 寄存器位保留；应用 Release 全量构建与 bootloader 构建通过。以上为主机验证，新 PCB 的时序、灯极性和回环性能尚未上板验证。
+
+USB 枚举前电流及挂起总电流尚未实测。当前固件挂起时关闭目标输出，但 MCU 时钟保持 180 MHz，尚未实现可证明满足 USB 挂起电流要求的低功耗路径；500 mA 描述符及输出开关本身不能证明整机 USB 电源合规。
 
 ## 性能边界
 

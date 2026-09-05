@@ -8,7 +8,7 @@ ailink 是基于 RT-Thread 的 STM32F446 固件工程。
 
 | 项 | 内容 |
 | --- | --- |
-| MCU | STM32F446RET6 核心板（LQFP64，Cortex-M4F，硬件 FPU，HSE 16MHz + LSE 32.768kHz；注意实板晶振为 16MHz，与 `docs/refs/sche` 原理图标注的 8MHz 不符，时钟树由 `HSE_VALUE` 推导） |
+| MCU | STM32F446RET6（LQFP64，Cortex-M4F，硬件 FPU，HSE 16MHz）；当前固件适配 v0.4 产品板：GPIO2=PA0、PC9 目标供电、PC3/4/5/8 通信灯。既有上板性能基线来自核心板，新板尚未上机验证 |
 | RTOS | RT-Thread v5.2.0（源码在仓库外 `$RTT_ROOT`，默认 `~/SDK/rt-thread`） |
 | 控制台 | UART2，PA2/PA3 115200（RT-Thread 设备名 `uart2`；uart1/uart6 归 USB 桥占用） |
 | 固件架构 | 二级启动：boot（裸机，扇区 0–3）+ app（RT-Thread，0x08010000）；USB 复合设备（双 CDC + CMSIS-DAP + GPIO）+ SPI Flash 文件系统 + ROM DFU 升级，设计见 `docs/design/` |

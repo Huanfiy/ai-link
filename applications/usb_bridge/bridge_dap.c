@@ -16,6 +16,7 @@
 #include "DAP_config.h"
 #include "DAP.h"
 
+#include "ailink_product.h"
 #include "usb_bridge.h"
 
 #define DAP_EV_OUT (1U << 0)
@@ -136,12 +137,12 @@ static void dap_entry(void *param)
     (void)param;
 
     while (1) {
-        rt_event_recv(&dap_ev, DAP_EV_OUT | DAP_EV_IN,
-                      RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR,
-                      RT_WAITING_FOREVER, &ev);
+        rt_event_recv(&dap_ev, DAP_EV_OUT | DAP_EV_IN, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR,
+                      rt_tick_from_millisecond(10), &ev);
 
         while (req_tail != req_head) {
-            if (in_busy) {
+            if (in_busy || !configured || !ailink_target_is_ready())
+            {
                 break; /* previous response still in flight */
             }
 

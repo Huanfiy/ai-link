@@ -41,6 +41,7 @@
 
 #include "usbd_core.h"
 
+#include "ailink_product.h"
 #include "usb_bridge.h"
 
 #define PUMP_IN_BUF_SIZE   512U /* one bulk transfer, 8 packets */
@@ -276,7 +277,7 @@ static void pump_usb_in_complete(uint8_t busid, uint8_t ep, uint32_t nbytes)
 static rt_err_t pump_uart_rx_ind_a(rt_device_t dev, rt_size_t size)
 {
     (void)dev;
-    (void)size;
+    bridge_activity_rx(USB_BRIDGE_CH_A, size);
     rt_event_send(&pump_a.ev, PUMP_EV_UART_RX);
     return RT_EOK;
 }
@@ -285,6 +286,7 @@ static rt_err_t pump_uart_tx_done_a(rt_device_t dev, void *buffer)
 {
     (void)dev;
     (void)buffer;
+    bridge_activity_tx_done(USB_BRIDGE_CH_A);
     pump_a.tx_dones++;
     pump_a.tx_inflight = 0;
     rt_event_send(&pump_a.ev, PUMP_EV_UART_TX);
@@ -294,7 +296,7 @@ static rt_err_t pump_uart_tx_done_a(rt_device_t dev, void *buffer)
 static rt_err_t pump_uart_rx_ind_b(rt_device_t dev, rt_size_t size)
 {
     (void)dev;
-    (void)size;
+    bridge_activity_rx(USB_BRIDGE_CH_B, size);
     rt_event_send(&pump_b.ev, PUMP_EV_UART_RX);
     return RT_EOK;
 }
@@ -303,6 +305,7 @@ static rt_err_t pump_uart_tx_done_b(rt_device_t dev, void *buffer)
 {
     (void)dev;
     (void)buffer;
+    bridge_activity_tx_done(USB_BRIDGE_CH_B);
     pump_b.tx_dones++;
     pump_b.tx_inflight = 0;
     rt_event_send(&pump_b.ev, PUMP_EV_UART_TX);
@@ -367,7 +370,8 @@ static void pump_drain_out_slots(struct bridge_pump *p)
 {
     uint32_t staged = 0;
 
-    if (p->tx_inflight) {
+    if (!p->configured || !ailink_target_is_ready() || p->tx_inflight)
+    {
         return; /* one node in flight max, next batch on TX-done */
     }
 
@@ -389,18 +393,29 @@ static void pump_drain_out_slots(struct bridge_pump *p)
         return;
     }
 
+    rt_base_t level = rt_hw_interrupt_disable();
+    /* Serial completion must not race the activity-start event. */
+    if (!p->configured || !ailink_target_is_ready())
+    {
+        rt_hw_interrupt_enable(level);
+        return;
+    }
     p->tx_inflight = 1;
     p->tx_nodes++;
     if (rt_device_write(p->uart, 0, p->tx_stage, staged) != (rt_ssize_t)staged) {
         p->tx_inflight = 0; /* uart write failed: drop the batch */
     } else {
+        bridge_activity_tx_start(p->ch);
         p->usb_to_uart_bytes += staged;
     }
+    rt_hw_interrupt_enable(level);
 }
 
 static void pump_send_uart_data(struct bridge_pump *p)
 {
-    if (p->in_busy || !p->configured || !p->host_reading) {
+    if (p->in_busy || !p->configured || !p->host_reading ||
+        !ailink_target_is_ready())
+    {
         return;
     }
 

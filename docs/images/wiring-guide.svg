@@ -202,7 +202,7 @@
     <g transform="translate(440 802)">
       <rect width="166" height="174" rx="14" fill="#f0f9ff" stroke="#7dd3fc" stroke-width="2"/>
       <text x="83" y="36" text-anchor="middle" font-size="17" font-weight="700" fill="#0369a1">bit 2</text>
-      <text x="83" y="78" text-anchor="middle" font-size="26" font-weight="800" class="mono">PB2</text>
+      <text x="83" y="78" text-anchor="middle" font-size="26" font-weight="800" class="mono">PA0</text>
       <path d="M28 98 H138" stroke="#bae6fd" stroke-width="2"/>
       <text x="83" y="126" text-anchor="middle" class="small">浮空输入</text>
       <text x="83" y="151" text-anchor="middle" class="small">推挽输出</text>

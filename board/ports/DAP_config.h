@@ -14,6 +14,8 @@
 #ifndef __DAP_CONFIG_H__
 #define __DAP_CONFIG_H__
 
+#include "ailink_product.h"
+#include <rtthread.h>
 #include <stdint.h>
 
 #include <stm32f4xx.h>
@@ -96,7 +98,12 @@
 /* MODER field manipulation for one pin: 00 input, 01 output */
 __STATIC_FORCEINLINE void dap_pin_mode_output(uint32_t pin)
 {
-    DAP_GPIO->MODER = (DAP_GPIO->MODER & ~(3UL << (pin * 2U))) | (1UL << (pin * 2U));
+    rt_base_t level = rt_hw_interrupt_disable();
+    if (ailink_target_is_ready())
+    {
+        DAP_GPIO->MODER = (DAP_GPIO->MODER & ~(3UL << (pin * 2U))) | (1UL << (pin * 2U));
+    }
+    rt_hw_interrupt_enable(level);
 }
 
 __STATIC_FORCEINLINE void dap_pin_mode_input(uint32_t pin)
@@ -114,6 +121,12 @@ __STATIC_INLINE void PORT_JTAG_SETUP(void)
 /** Setup SWD I/O pins: SWCLK, SWDIO, and nRESET. */
 __STATIC_INLINE void PORT_SWD_SETUP(void)
 {
+    rt_base_t level = rt_hw_interrupt_disable();
+    if (!ailink_target_is_ready())
+    {
+        rt_hw_interrupt_enable(level);
+        return;
+    }
     RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
     (void)RCC->AHB1ENR;
 
@@ -138,6 +151,7 @@ __STATIC_INLINE void PORT_SWD_SETUP(void)
     dap_pin_mode_output(DAP_PIN_SWCLK);
     dap_pin_mode_output(DAP_PIN_SWDIO);
     dap_pin_mode_output(DAP_PIN_NRESET);
+    rt_hw_interrupt_enable(level);
 }
 
 /** Disable JTAG/SWD I/O Pins: all to high-impedance. */
@@ -146,6 +160,8 @@ __STATIC_INLINE void PORT_OFF(void)
     dap_pin_mode_input(DAP_PIN_SWCLK);
     dap_pin_mode_input(DAP_PIN_SWDIO);
     dap_pin_mode_input(DAP_PIN_NRESET);
+    DAP_GPIO->PUPDR &= ~((3UL << (DAP_PIN_SWCLK * 2U)) | (3UL << (DAP_PIN_SWDIO * 2U)) |
+                         (3UL << (DAP_PIN_NRESET * 2U)));
 }
 
 /** SWCLK/TCK I/O pin: Get Input. */

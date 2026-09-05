@@ -2,7 +2,7 @@ from building import *
 
 cwd = GetCurrentDir()
 src = ['bridge_desc.c', 'cdc_proto.c', 'bridge_pump.c', 'bridge_gpio.c',
-       'bridge_dap.c', 'dap/DAP.c', 'dap/SW_DP.c']
+       'bridge_dap.c', 'bridge_product.c', 'dap/DAP.c', 'dap/SW_DP.c']
 CPPPATH = [cwd, cwd + '/dap']
 
 group = DefineGroup('usb_bridge', src, depend = ['BSP_USING_USBD_FS'], CPPPATH = CPPPATH)

@@ -1,7 +1,7 @@
 from building import *
 
 cwd = GetCurrentDir()
-src = []
+src = ['ailink_product.c']
 CPPPATH = [cwd]
 
 if GetDepend(['BSP_USING_SPI_FLASH']):

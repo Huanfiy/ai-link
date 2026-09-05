@@ -13,6 +13,9 @@
 #define USB_BRIDGE_H
 
 #include <rtthread.h>
+#include <stdbool.h>
+
+struct usb_setup_packet;
 #include <stdint.h>
 
 /* Single OTG_FS bus */
@@ -69,6 +72,14 @@ void bridge_pump_notify_event(uint8_t event);
 rt_err_t bridge_pump_start(void);
 void bridge_pump_stat(void);
 void bridge_pump_dump_ep(void);
+
+/* Product power policy and activity events; all callbacks are ISR-safe. */
+rt_err_t bridge_product_start(void);
+void bridge_product_notify_event(uint8_t event);
+void bridge_product_prepare_reboot(void);
+void bridge_activity_tx_start(uint8_t channel);
+void bridge_activity_tx_done(uint8_t channel);
+void bridge_activity_rx(uint8_t channel, rt_size_t size);
 
 /* GPIO vendor requests (EP0), same code points as ailink-f407 */
 #define USB_BRIDGE_GPIO_REQ_CONFIG 0x60U /* wValue = dir<<8 | mask */

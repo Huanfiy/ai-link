@@ -10,6 +10,7 @@
  * 2026-07-21     ailink       180MHz main PLL + PLLSAI 48MHz for USB OTG_FS
  */
 
+#include "ailink_product.h"
 #include <board.h>
 #include <drv_common.h>
 
@@ -36,6 +37,8 @@ void SystemClock_Config(void)
   SCB->VTOR = (uint32_t)g_pfnVectors;
   __DSB();
   __ISB();
+
+  ailink_product_hw_init();
 
   /**Configure the main internal regulator output voltage
   */
