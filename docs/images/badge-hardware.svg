@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="101" height="20" role="img" aria-label="hardware: v0.4">
+  <title>hardware: v0.4 (board revision, not a firmware release)</title>
+  <linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient>
+  <clipPath id="r"><rect width="101" height="20" rx="3"/></clipPath>
+  <g clip-path="url(#r)"><path fill="#555" d="M0 0h62v20H0z"/><path fill="#e87924" d="M62 0h39v20H62z"/><path fill="url(#s)" d="M0 0h101v20H0z"/></g>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,DejaVu Sans,sans-serif" font-size="11">
+    <g fill="#010101" opacity=".3"><text x="31" y="15">hardware</text><text x="81" y="15">v0.4</text></g>
+    <text x="31" y="14">hardware</text><text x="81" y="14">v0.4</text>
+  </g>
+</svg>

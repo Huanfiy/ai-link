@@ -1,102 +1,145 @@
 # ailink
 
-基于 RT-Thread 的 STM32F446 固件工程：板载 USB OTG_FS 枚举为标准复合设备，单根 USB 线同时提供两路免驱 CDC 串口（波特率上限 11.25 M）、8 路 GPIO 与 CMSIS-DAP v2 调试器，并支持免调试器的 DFU 固件升级。
+![hardware: v0.4](docs/images/badge-hardware.svg) ![Linux: tested](docs/images/badge-linux.svg) [![license: Apache-2.0](docs/images/badge-license.svg)](LICENSE)
 
-| 项 | 内容 |
+**一根 USB 线，同时连接双路串口、SWD 调试与 8 路 GPIO。**
+
+ailink 是基于 STM32F446 的开源 USB 多功能调试工具：同时监控两路 UART 流、调试目标 MCU，并用主机脚本控制 GPIO，减少桌面上的转接器与连线。
+
+![电脑通过一根 USB 连接 ailink，提供双串口、SWD 调试和 8 路 GPIO](docs/images/product-overview.svg)
+
+[快速开始](#快速开始) · [接线说明](#接线说明) · [使用示例](#使用示例) · [性能概览](#性能概览) · [开发与贡献](#开发与贡献)
+
+## 能做什么
+
+| 功能 | 使用体验 |
 | --- | --- |
-| MCU | STM32F446RET6（LQFP64，Cortex-M4F，512 KB Flash / 128 KB RAM，180 MHz） |
-| RTOS | RT-Thread v5.2.2（USB 栈为其内置 CherryUSB，要求 ≥ 1.5.x） |
-| 设备身份 | 双 CDC ACM + vendor 复合设备，VID/PID `1209:0010`（pid.codes 测试号） |
-| 目标平台 | Linux（已验证）；Windows 10+ 按免驱设计（usbser + MS OS 2.0 自动绑 WinUSB），尚未实测 |
-| 许可 | Apache-2.0；`1209:0010` 为 pid.codes 测试用途分配，不可用于产品销售 |
+| 双路 USB 串口 | 两路独立 CDC ACM，波特率最高 **11.25 Mbaud**，同时连接两个串口设备 |
+| CMSIS-DAP v2 | 接入 OpenOCD / pyOCD，支持 **SWD**，可与串口配合使用 |
+| 8 路 GPIO | Python 工具配置方向、读取电平、按位控制输出 |
+| USB 固件升级 | 首刷后通过 **USB DFU** 更新 app，无需再接外部调试器 |
 
-## 功能
+> **使用前须知：** 本仓库提供固件与主机工具，需要自行准备匹配硬件。当前适配 **v0.4 产品板，新板尚未上板验证**；已有实测来自此前核心板样机。Linux 已验证，Windows 10+ 按自动绑驱设计但尚未实测，macOS 暂无验证记录。
 
-| 通道 | 主机侧 | 设备侧 | 说明 |
-| --- | --- | --- | --- |
-| 串口 A | `/dev/ttyACM*`（by-id `if00`） | USART6，PC6=TX / PC7=RX | 上限 11.25 M；最新吞吐与完整性基线见性能测试报告 |
-| 串口 B | `/dev/ttyACM*`（by-id `if02`） | USART1，PA9=TX / PA10=RX | 同上（两路同为 APB2 90 MHz 时钟域） |
-| GPIO | `ailink-gpio.py` | bit 0–7 = PB0 / PB1 / PA0 / PB8 / PB9 / PB10 / PA1 / PA8 | EP0 vendor request，不占用串口与调试通道；PB2 专用于 BOOT1 下拉 |
-| 调试器 | pyOCD / OpenOCD | SWCLK=PA4 / SWDIO=PA5 / nRESET=PA6 | CMSIS-DAP v2；最新 SWD 时钟与内存吞吐基线见性能测试报告 |
+## 快速开始
 
-- 四路通道可并发使用；固件控制台独立走 UART2（PA2=TX / PA3=RX，115200 8N1），不参与桥接。
-- 序列号取 MCU 96-bit UID，`/dev/serial/by-id/` 路径跨板稳定。
-- 当前固件接入 v0.4 产品板的四路串口灯和 PC9 目标供电控制，策略与验证边界见 [产品供电与指示](docs/design/usb-bridge.md#产品供电与指示v04)。旧核心板需要按新版引脚连接。
-- 固件升级免调试器：`ailink-ota.py flash` 一条命令走 ROM DFU 直刷，期间设备离线；升级中断不变砖，自研 boot 校验失败自动回落 DFU，重跑命令即救回。
-- 已知边界：串口无 RTS/CTS 硬件流控，主机连续写入需限制在飞字节数（见 `bench.py --window`，设备侧 RX 环每通道 8 KB）；双路串口与 DAP 共享 USB FS 总线带宽。
+已有固件的设备只需 USB 数据线与 Linux 主机；空板先完成下文的[首次烧录](#开发与贡献)。以下以 Ubuntu / Debian 为例，在普通用户终端执行。
 
-最新 DAPLink、双路串口与固件升级性能见 [performance-report.md](performance-report.md)；端点映射、描述符布局与 FIFO 分区见 [docs/design/usb-bridge.md](docs/design/usb-bridge.md)；升级与救砖链路见 [docs/design/ota.md](docs/design/ota.md)。
+### 1. 安装主机工具
+
+```bash
+sudo apt install git python3 python3-venv libusb-1.0-0
+git clone https://github.com/Huanfiy/ai-link.git
+cd ai-link
+python3 -m venv .venv
+.venv/bin/python -m pip install -r tools/host/requirements.txt
+```
+
+后续命令均在仓库根目录执行，无需激活虚拟环境。
+
+### 2. 配置权限
+
+```bash
+getent group plugdev || sudo groupadd plugdev
+sudo usermod -aG plugdev "$USER"
+sudo tools/host/install.sh
+```
+
+添加用户组后，**注销并重新登录，再插拔设备**。串口若提示权限不足，用 `ls -l /dev/ttyACM*` 检查所属组；若为 `dialout`，执行 `sudo usermod -aG dialout "$USER"` 后重新登录。
+
+### 3. 确认识别成功
+
+```bash
+.venv/bin/python tools/host/ailink-ota.py info
+ls -l /dev/serial/by-id/*ailink*
+```
+
+应显示固件版本与 CRC，以及两路串口：`if00` 为 **A 路**，`if02` 为 **B 路**。优先使用含设备 UID 的 `by-id` 路径，避免依赖易变化的 `ttyACM` 编号。
 
 ## 接线说明
 
-![ailink 串口、CMSIS-DAP 与 GPIO 接线说明](docs/images/wiring-guide.svg)
+> **3.3 V 逻辑电平，必须共地，串口 TX/RX 交叉连接。** 目标建议独立供电；使用板载供电前须核对电路，避免电源回灌。v0.4 供电与电流验证边界见[产品供电说明](docs/design/usb-bridge.md#产品供电与指示v04)。
 
-- 串口 A/B 的 TX 与外部设备 RX 交叉连接，RX 与外部设备 TX 交叉连接。
-- ailink 与外部串口设备或目标 MCU 必须共地；所有信号按 3.3 V 逻辑电平使用，目标设备建议独立供电。
-- CMSIS-DAP 仅支持 SWD，接线为 `PA4 → SWCLK`、`PA5 ↔ SWDIO`、`PA6 → nRESET`、`GND ↔ GND`，不支持 JTAG / SWO。
-- GPIO 须先用 `ailink-gpio.py dir` 配置方向，再执行 `set`；`get` 可读取全部引脚电平与方向。
+![双串口、SWD 与 GPIO 引脚及接线说明；GPIO bit 2 为 PA0](docs/images/wiring-guide.svg)
 
-## 构建与烧录
+SWD 仅支持 SWCLK / SWDIO / nRESET，**不支持 JTAG / SWO**。图中的 SWD 接口用于调试外部目标，不是给 ailink 自身首刷的接口；已有核心板请按新版引脚核对接线。
 
-| 依赖 | 说明 |
-| --- | --- |
-| ARM GNU Toolchain 13.3.rel1 | `arm-none-eabi-*`，`bin` 路径由 `RTT_EXEC_PATH` 指定（默认 `~/toolchain/arm-eabi-toolchain/bin`） |
-| RT-Thread v5.2.2 源码 | 根目录由 `RTT_ROOT` 指定（默认 `~/SDK/rt-thread`） |
-| RT-Thread Env | 执行 `pkgs --update` 拉取 `packages/`（不入库） |
-| Python 3 + python3-venv | scons / kconfiglib 版本锁定于 `requirements.txt`，首次构建自动装入 `.venv/` |
-| bear、OpenOCD | 分别用于生成 `compile_commands.json` 与烧录（默认 ST-Link） |
+## 使用示例
+
+各示例独立使用；先确认接线，再执行对应命令。
+
+### 双路串口
+
+将占位符替换为实际 `by-id` 路径，波特率与对端一致；另开终端选择 `if02` 即可使用 B 路，按 `Ctrl+]` 退出。
 
 ```bash
-pkgs --update            # 首次克隆后拉取 packages/
-./run.sh build           # 构建 app，默认 Release
-./run.sh build-boot      # 构建 bootloader
-./run.sh flash-all       # 空板首刷：boot（0x08000000）+ app（0x08010000）
-./run.sh rebuild-flash   # 清理、构建并烧录 app（boot 稳定后日常够用）
-./run.sh help            # 完整命令与参数
+PORT='/dev/serial/by-id/替换为实际设备路径-if00'
+.venv/bin/python -m serial.tools.miniterm "$PORT" 115200
 ```
 
-产物为 `build/ailink.elf` / `.bin` / `.map` 与 `bootloader/build/ailink-boot.bin`；app 链接后自动回填 `.fw_info` 元数据并输出内存占用报告。
-
-注意：核心板实装晶振为 16 MHz（与 `docs/refs/sche` 原理图标注的 8 MHz 不符），时钟树由 `board/CubeMX_Config/Inc/stm32f4xx_hal_conf.h` 的 `HSE_VALUE` 推导；更换晶振后只需改该宏。
-
-## 主机侧使用
+需要压测时，断开该路外部设备并短接 TX/RX，再执行：
 
 ```bash
-sudo tools/host/install.sh                   # 安装 udev 规则，执行一次
-pip install -r tools/host/requirements.txt   # pyserial >= 3.5、pyusb >= 1.2
+.venv/bin/python tools/host/bench.py "$PORT" 4000000 --window 2048
 ```
 
-udev 规则将 `1209:0010` 与 `0483:df11`（ROM DFU）加入 plugdev 组，使 pyusb 工具、pyOCD 与 dfu-util 免 sudo。不安装规则时两路串口仍可直接使用（cdc_acm 内核驱动自动绑定），代价是 GPIO / OTA / 调试工具需 sudo。
+### SWD 调试
+
+pyOCD 为可选依赖；以下命令识别探针，实际调试还需按目标 MCU 选择配置。
 
 ```bash
-tools/host/ailink-gpio.py dir 0xFF 0xFF    # 8 路 GPIO 全部配置为输出
-tools/host/ailink-gpio.py set 0x0F 0x05    # bit0/bit2 置高，bit1/bit3 置低
-tools/host/bench.py /dev/ttyACM1 4000000   # 回环吞吐测试，需 TX-RX 短接（A 路 PC6-PC7）
-pyocd list                                 # 应识别出 CMSIS-DAP v2 调试器
-tools/host/ailink-ota.py flash build/ailink.bin  # OTA 升级（需 dfu-util >= 0.9）
-tools/host/ailink-ota.py info              # 查询设备运行中的固件版本
+.venv/bin/python -m pip install pyocd
+.venv/bin/pyocd list
 ```
 
-## 目录结构
+### GPIO 控制
 
-```text
-applications/  应用层（usb_bridge/ 为复合设备实现，ota/ 为升级触发与镜像元数据）
-board/         板级初始化、CubeMX 配置、链接脚本、ports/ 板级件
-bootloader/    自研裸机 bootloader（DFU 跳板、镜像校验、变砖兜底）
-libraries/     RT-Thread 设备框架对接 STM32 HAL 的适配驱动
-docs/          设计文档 design/、长期备忘 notes/、外部参考 refs/
-tools/         构建辅助脚本 build/ 与主机工具 host/
-run.sh         构建与烧录入口
+先用 `get` 读取状态。确认 **PB0 未连接其他输出源**后，下例只控制 bit 0，再恢复输入；掩码未选中的引脚保持不变。
+
+```bash
+.venv/bin/python tools/host/ailink-gpio.py get
+.venv/bin/python tools/host/ailink-gpio.py dir 0x01 0x01
+.venv/bin/python tools/host/ailink-gpio.py set 0x01 0x01
+.venv/bin/python tools/host/ailink-gpio.py dir 0x01 0x00
 ```
 
-## 相关文档
+### USB 固件升级
 
-- [performance-report.md](performance-report.md)：当前有效性能基线（DAPLink、双路串口、固件升级）。
-- [docs/design/usb-bridge.md](docs/design/usb-bridge.md)：USB 复合设备设计事实（协议、端点、带宽约束）。
-- [docs/design/ota.md](docs/design/ota.md)：固件升级与救砖链路（分区、`.fw_info`、boot 行为、恢复路径）。
-- [AGENTS.md](AGENTS.md)：AI 协作速查（环境、命令、目录、注意事项）。
-- [code-rules.md](code-rules.md) / [docs-rules.md](docs-rules.md)：编码规范与文档治理规则。
+安装 `dfu-util >= 0.9`（`sudo apt install dfu-util`），准备匹配硬件的 app 镜像后执行：
 
-## 许可
+```bash
+.venv/bin/python tools/host/ailink-ota.py flash build/ailink.bin
+```
 
-工程代码以 [Apache-2.0](LICENSE) 发布。`applications/usb_bridge/dap/` 为 ARM CMSIS-DAP 参考实现逐字副本（Apache-2.0）。
+工具自动校验镜像、进入 DFU、写入并核对 CRC。**升级期间所有业务通道离线**，请先结束串口和调试会话。boot 完好且 app 校验失败时可回落 DFU，重新执行升级；不覆盖 boot 损坏或硬件故障，详见[升级与恢复](docs/design/ota.md#恢复路径分层)。
+
+## 性能概览
+
+![核心板实测：单串口回环约 569 kB/s，双串口合计约 588 kB/s，SWD RAM 读写约 96 kB/s，123796 B app 升级约 20 秒](docs/images/performance-overview.svg)
+
+数据来自 **2026-07-21、固件 `8bfcebe53375`、核心板样机**，不是 v0.4 板验证结果。串口为回环吞吐，SWD 为目标 RAM 读写而非 Flash 烧录；环境与复现方法见[性能报告](performance-report.md)。
+
+**使用边界：** 双串口与 DAP 共享 USB FS 带宽，波特率不等于持续吞吐；串口无 RTS/CTS，持续传输需限速或上层应答。端口未打开时的数据不缓存、不回放。
+
+## 开发与贡献
+
+固件基于 **RT-Thread 5.2.2 / STM32F446RET6 / HSE 16 MHz**。准备 ARM GNU Toolchain 13.3.rel1、RT-Thread Env、bear、Make 与 OpenOCD，设置 `RTT_ROOT` 和 `RTT_EXEC_PATH` 后：
+
+```bash
+pkgs --update         # 拉取外部软件包
+./run.sh build        # 构建 app，默认 Release
+./run.sh build-boot   # 构建 bootloader
+./run.sh flash-all    # 外接 ST-Link 首刷 boot + app，会改写固件
+```
+
+产物为 `build/ailink.bin` 与 `bootloader/build/ailink-boot.bin`。硬件需匹配 `board/` 配置；参考原理图不是 v0.4 完整制造资料，且其晶振标注与既有核心板实装不同，请核对实际电路。
+
+- **开发入口：** [环境与调试](AGENTS.md) · [编码规范](code-rules.md) · [文档规范](docs-rules.md)
+- **设计资料：** [USB 与供电](docs/design/usb-bridge.md) · [升级与恢复](docs/design/ota.md) · [串口门控](docs/design/cdc-port-gating.md)
+- **欢迎贡献：** v0.4 上板验证、Windows 实测、目标兼容性测试与文档改善。Issues 请附硬件/固件版本、主机环境、接线、复现步骤与日志；代码 PR 请执行 `./run.sh rebuild` 并说明验证范围。
+
+## 许可证
+
+工程代码采用 [Apache-2.0](LICENSE)。感谢 RT-Thread、CherryUSB、STM32 CMSIS/HAL 与 Arm CMSIS-DAP；第三方组件许可与声明以各自文件为准。本项目提供 CMSIS-DAP v2 接口，并未集成 Arm DAPLink 固件。
+
+USB VID/PID `1209:0010` 为 pid.codes 测试用途标识，请勿直接用于产品销售；该标识的使用限制与代码许可证是不同事项。

@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="380" viewBox="0 0 1040 380" role="img" aria-labelledby="title desc">
+  <title id="title">ailink：一根 USB，四路协同</title>
+  <desc id="desc">电脑通过一根 USB 数据线连接 ailink，分别提供串口 A、串口 B、CMSIS-DAP v2 SWD 调试与 8 路 GPIO。功能示意，不代表实物布局。</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#f8fafc"/><stop offset="1" stop-color="#eef2ff"/></linearGradient>
+    <linearGradient id="device" x2="1" y2="1"><stop stop-color="#172554"/><stop offset="1" stop-color="#312e81"/></linearGradient>
+    <style>
+      text { font-family: "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif; }
+      .label { font-size: 19px; font-weight: 700; fill: #0f172a; }
+      .note { font-size: 15px; fill: #475569; }
+      .wire { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+  <rect x="1" y="1" width="1038" height="378" rx="20" fill="url(#bg)" stroke="#dbe3ef"/>
+  <text x="32" y="42" font-size="23" font-weight="700" fill="#0f172a">一根 USB，四路协同</text>
+  <text x="1008" y="41" text-anchor="end" class="note">连接 · 观察 · 调试 · 控制</text>
+
+  <!-- Host and USB link -->
+  <rect x="40" y="136" width="190" height="122" rx="14" fill="#fff" stroke="#cbd5e1"/>
+  <rect x="106" y="157" width="58" height="36" rx="4" fill="#eff6ff" stroke="#64748b" stroke-width="2"/>
+  <path d="M135 194v10m-17 0h34" class="wire" stroke="#64748b"/>
+  <text x="135" y="235" text-anchor="middle" class="label">你的电脑</text>
+  <path d="M230 197H340" class="wire" stroke="#64748b"/>
+  <text x="285" y="179" text-anchor="middle" class="note">USB</text>
+  <circle cx="235" cy="197" r="4" fill="#64748b"/>
+
+  <!-- Device -->
+  <rect x="340" y="118" width="235" height="158" rx="18" fill="url(#device)"/>
+  <rect x="333" y="183" width="14" height="28" rx="4" fill="#94a3b8"/>
+  <text x="457" y="181" text-anchor="middle" font-size="42" font-weight="800" fill="#fff">ailink</text>
+  <text x="457" y="215" text-anchor="middle" font-size="16" fill="#c7d2fe">USB 多功能调试工具</text>
+  <text x="457" y="248" text-anchor="middle" font-size="13" fill="#c7d2fe">STM32F446 · RT-Thread</text>
+
+  <!-- Independent function paths -->
+  <path d="M575 151H613V108H670" class="wire" stroke="#2563eb"/>
+  <path d="M575 181H639V170H670" class="wire" stroke="#0891b2"/>
+  <path d="M575 211H639V232H670" class="wire" stroke="#7c3aed"/>
+  <path d="M575 241H613V294H670" class="wire" stroke="#059669"/>
+
+  <rect x="670" y="82" width="330" height="52" rx="10" fill="#fff" stroke="#bfdbfe"/>
+  <rect x="670" y="82" width="5" height="52" rx="2" fill="#2563eb"/>
+  <text x="690" y="114" class="label">串口 A</text><text x="805" y="114" class="note">主控通信与日志</text>
+
+  <rect x="670" y="144" width="330" height="52" rx="10" fill="#fff" stroke="#a5f3fc"/>
+  <rect x="670" y="144" width="5" height="52" rx="2" fill="#0891b2"/>
+  <text x="690" y="176" class="label">串口 B</text><text x="805" y="176" class="note">模块通信与日志</text>
+
+  <rect x="670" y="206" width="330" height="52" rx="10" fill="#fff" stroke="#ddd6fe"/>
+  <rect x="670" y="206" width="5" height="52" rx="2" fill="#7c3aed"/>
+  <text x="690" y="238" class="label">SWD</text><text x="805" y="238" class="note">CMSIS-DAP v2 调试</text>
+
+  <rect x="670" y="268" width="330" height="52" rx="10" fill="#fff" stroke="#a7f3d0"/>
+  <rect x="670" y="268" width="5" height="52" rx="2" fill="#059669"/>
+  <text x="690" y="300" class="label">8 路 GPIO</text><text x="805" y="300" class="note">电平读取与输出控制</text>
+
+  <text x="32" y="350" class="note">首刷后支持 USB DFU 更新 app</text>
+  <text x="1008" y="350" text-anchor="end" class="note">功能示意 · 非实物布局</text>
+</svg>

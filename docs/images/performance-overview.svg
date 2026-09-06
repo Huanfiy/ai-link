@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="410" viewBox="0 0 1040 410" role="img" aria-labelledby="title desc">
+  <title id="title">ailink 核心板样机性能概览</title>
+  <desc id="desc">2026-07-21，固件 8bfcebe53375，Linux 核心板样机测试。单串口最高回环均值约 569 kB/s；双串口并发回环合计约 588 kB/s；CMSIS-DAP 目标 RAM 读写约 96 kB/s；123796 字节 app 完整 USB 升级约 20 秒。不代表 v0.4 产品板验证结果。</desc>
+  <defs>
+    <style>
+      text { font-family: "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif; }
+      .label { font-size: 18px; font-weight: 700; fill: #0f172a; }
+      .note { font-size: 15px; fill: #475569; }
+      .value { font-size: 44px; font-weight: 800; }
+      .unit { font-size: 19px; font-weight: 500; }
+    </style>
+  </defs>
+  <rect x="1" y="1" width="1038" height="408" rx="20" fill="#f8fafc" stroke="#dbe3ef"/>
+  <text x="32" y="42" font-size="23" font-weight="700" fill="#0f172a">实测表现</text>
+  <text x="1008" y="41" text-anchor="end" class="note">核心板样机 · Linux · 非 v0.4 板验证</text>
+
+  <!-- Metric cards are intentionally not a shared-axis chart: workloads and units differ. -->
+  <rect x="28" y="65" width="482" height="136" rx="12" fill="#fff" stroke="#bfdbfe"/>
+  <text x="50" y="97" class="label">单串口回环</text>
+  <text x="50" y="149" class="value" fill="#2563eb">≈ 569 <tspan class="unit">kB/s</tspan></text>
+  <text x="50" y="180" class="note">最高回环均值 · 6 Mbaud · 另一通道空闲</text>
+
+  <rect x="530" y="65" width="482" height="136" rx="12" fill="#fff" stroke="#a5f3fc"/>
+  <text x="552" y="97" class="label">双串口并发</text>
+  <text x="552" y="149" class="value" fill="#0891b2">≈ 588 <tspan class="unit">kB/s</tspan></text>
+  <text x="552" y="180" class="note">两路回环合计 · 每路配置 11.25 Mbaud</text>
+
+  <rect x="28" y="217" width="482" height="136" rx="12" fill="#fff" stroke="#ddd6fe"/>
+  <text x="50" y="249" class="label">CMSIS-DAP v2</text>
+  <text x="50" y="301" class="value" fill="#7c3aed">≈ 96 <tspan class="unit">kB/s</tspan></text>
+  <text x="50" y="332" class="note">目标 RAM 读写 · 非 Flash 烧录速度</text>
+
+  <rect x="530" y="217" width="482" height="136" rx="12" fill="#fff" stroke="#a7f3d0"/>
+  <text x="552" y="249" class="label">USB 固件升级</text>
+  <text x="552" y="301" class="value" fill="#059669">≈ 20 <tspan class="unit">s</tspan></text>
+  <text x="552" y="332" class="note">123,796 B app · 含重枚举与 CRC 复核</text>
+
+  <text x="32" y="386" class="note">2026-07-21 · 固件 8bfcebe53375</text>
+  <text x="1008" y="386" text-anchor="end" class="note">来源：performance-report.md · 非各通道同时满载</text>
+</svg>
